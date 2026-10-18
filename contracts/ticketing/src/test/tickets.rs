@@ -159,13 +159,17 @@ fn extend_ticket_ttl_renews_ticket_without_changing_state() {
     env.ledger()
         .with_mut(|ledger| ledger.sequence_number = 40_000);
     let key = DataKey::Ticket(ticket_id);
-    let ticket_ttl_before = env.as_contract(&client.address, || env.storage().persistent().get_ttl(&key));
-    let instance_ttl_before = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    let ticket_ttl_before =
+        env.as_contract(&client.address, || env.storage().persistent().get_ttl(&key));
+    let instance_ttl_before =
+        env.as_contract(&client.address, || env.storage().instance().get_ttl());
 
     client.extend_ticket_ttl(&ticket_id);
 
-    let ticket_ttl_after = env.as_contract(&client.address, || env.storage().persistent().get_ttl(&key));
-    let instance_ttl_after = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    let ticket_ttl_after =
+        env.as_contract(&client.address, || env.storage().persistent().get_ttl(&key));
+    let instance_ttl_after =
+        env.as_contract(&client.address, || env.storage().instance().get_ttl());
     assert!(ticket_ttl_after > ticket_ttl_before);
     assert!(instance_ttl_after >= instance_ttl_before);
 }
@@ -177,11 +181,13 @@ fn reading_an_event_does_not_extend_its_ttl() {
 
     env.ledger()
         .with_mut(|ledger| ledger.sequence_number = 40_000);
-    let instance_ttl_before = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    let instance_ttl_before =
+        env.as_contract(&client.address, || env.storage().instance().get_ttl());
 
     client.get_event(&1);
 
-    let instance_ttl_after = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    let instance_ttl_after =
+        env.as_contract(&client.address, || env.storage().instance().get_ttl());
     assert!(instance_ttl_after >= instance_ttl_before);
 }
 

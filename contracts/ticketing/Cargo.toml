@@ -15,6 +15,5 @@ doctest = false
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.5"
 soroban-sdk = { workspace = true, features = ["testutils"] }
 proptest = { workspace = true }

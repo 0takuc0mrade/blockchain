@@ -1208,7 +1208,9 @@ impl TicketingContract {
         if !env.storage().persistent().has(&key) {
             return Err(Error::TicketNotFound);
         }
-        env.storage().persistent().extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
@@ -1237,16 +1239,12 @@ impl TicketingContract {
     }
 
     fn get_ticket_inner(env: &Env, ticket_id: u64) -> Result<Ticket, Error> {
-        let key = DataKey::Ticket(ticket_id);
-        let ticket = env
+        let stored: StoredTicket = env
             .storage()
             .persistent()
-            .get(&key)
+            .get(&DataKey::Ticket(ticket_id))
             .ok_or(Error::TicketNotFound)?;
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
-        Ok(ticket)
+        Self::unpack_ticket(stored)
     }
 
     fn increment_tickets_issued(env: &Env, event_id: u64, amount: u64) {

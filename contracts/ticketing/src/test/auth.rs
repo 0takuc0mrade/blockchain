@@ -170,8 +170,7 @@ fn second_proposal_resets_timelock() {
     );
 
     // Advance past the second proposal's deadline and verify it can be applied.
-    env.ledger()
-        .set_sequence_number(delay / 2 + delay);
+    env.ledger().set_sequence_number(delay / 2 + delay);
     client.apply_payment_token(&admin);
 }
 
