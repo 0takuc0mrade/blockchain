@@ -55,7 +55,7 @@ verification, not with a readable error.
 
 | Group | Entry points |
 |---|---|
-| Reads (no signature) | `get_event`, `get_ticket`, `verify_ticket`, `verify_tickets`, `is_valid`, `event_payment_token`, `token_decimals` |
+| Reads (no signature) | `get_event`, `get_ticket`, `verify_ticket`, `verify_tickets`, `is_ticket_valid`, `is_valid`, `event_payment_token`, `token_decimals` |
 | Organizer writes | `create_event`, `create_event_with_options`, `allocate_lottery`, `enable_escrow`, `set_event_payment_token`, `issue_ticket`, `set_seat`, `check_in`, `check_in_batch`, `revoke_ticket`, `revoke_with_refund`, `revoke_batch`, `release_escrow` |
 | Owner writes | `transfer_ticket`, `transfer_batch`, `create_gift_claim`, `claim_gift`, `list_for_resale`, `cancel_resale` |
 | Buyer writes | `purchase_primary`, `buy_resale` |
@@ -157,10 +157,17 @@ if (!rpc.Api.isSimulationSuccess(sim)) throw new Error(sim.error);
 const ticket = scValToNative(sim.result?.[0]?.retval) as Ticket;
 ```
 
-`verify_ticket` is the primitive gate scanners and the backend's
-ownership screens should use. `verify_tickets` takes up to 50 ids in
-one call — use it for batch listing and group check-in views rather
-than looping single reads.
+Gate scanners that only need check-in eligibility can call
+`is_ticket_valid(ticket_id)`, which returns a boolean and preserves lookup
+errors. `is_valid(ticket_id, owner)` also checks the expected owner and returns
+`false` on errors. Only `Valid` tickets pass either check; resale listings must
+be cancelled or sold first. These queries require no signature and do not
+renew storage TTL. A successful query does not reserve admission: submit
+`check_in` and wait for success to prevent re-entry.
+
+Use `get_ticket` for ownership details. The legacy `verify_ticket` alias remains
+available. `verify_tickets` takes up to 50 ids in one call for batch listing and
+group check-in views.
 
 ### Write path
 

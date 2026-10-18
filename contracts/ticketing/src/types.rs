@@ -1,6 +1,7 @@
 //! Contract storage types shared across the ticketing contract.
 #![allow(missing_docs)]
 
+use crate::Error;
 use soroban_sdk::{contracttype, Address, BytesN, String};
 
 /// Optional common category labels for indexers and client applications.
@@ -218,4 +219,53 @@ pub enum DataKey {
     /// Presence marks an organizer the admin has approved to create events
     /// (issue #135).
     ApprovedOrganizer(Address),
+}
+
+// Keep the persistent encoding beside the public and stored ticket types.
+impl StoredTicket {
+    pub(crate) fn pack(ticket: &Ticket) -> StoredTicket {
+        StoredTicket {
+            event_id: ticket.event_id,
+            owner: ticket.owner.clone(),
+            tier: ticket.tier.clone(),
+            seat: ticket.seat.clone(),
+            lifecycle: ((ticket.transfers as u64) << 8) | Self::status_code(&ticket.status),
+            original_price: ticket.original_price,
+            resale_price: ticket.resale_price,
+        }
+    }
+
+    pub(crate) fn unpack(stored: StoredTicket) -> Result<Ticket, Error> {
+        let status_code = stored.lifecycle & 0xff;
+        let transfers = (stored.lifecycle >> 8) as u32;
+        Ok(Ticket {
+            event_id: stored.event_id,
+            owner: stored.owner,
+            tier: stored.tier,
+            seat: stored.seat,
+            status: Self::status_from_code(status_code)?,
+            original_price: stored.original_price,
+            resale_price: stored.resale_price,
+            transfers,
+        })
+    }
+
+    fn status_code(status: &TicketStatus) -> u64 {
+        match status {
+            TicketStatus::Valid => 0,
+            TicketStatus::Used => 1,
+            TicketStatus::Revoked => 2,
+            TicketStatus::Resale => 3,
+        }
+    }
+
+    fn status_from_code(code: u64) -> Result<TicketStatus, Error> {
+        match code {
+            0 => Ok(TicketStatus::Valid),
+            1 => Ok(TicketStatus::Used),
+            2 => Ok(TicketStatus::Revoked),
+            3 => Ok(TicketStatus::Resale),
+            _ => Err(Error::InvalidTicketLifecycle),
+        }
+    }
 }

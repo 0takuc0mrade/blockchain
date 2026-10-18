@@ -330,10 +330,7 @@ impl TicketingContract {
                 }
             }
         }
-        let event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&env, event_id, &organizer)?;
 
         env.prng().shuffle(&mut entrants);
         let mut ticket_ids = Vec::new(&env);
@@ -368,10 +365,7 @@ impl TicketingContract {
     ) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
-        let mut event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        let mut event = Self::require_organizer(&env, event_id, &organizer)?;
         if event.tickets_issued > 0 {
             return Err(Error::EventAlreadyStarted);
         }
@@ -395,10 +389,7 @@ impl TicketingContract {
     ) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
-        let mut event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        let mut event = Self::require_organizer(&env, event_id, &organizer)?;
         if event.tickets_issued > 0 {
             return Err(Error::TicketsAlreadyIssued);
         }
@@ -440,10 +431,7 @@ impl TicketingContract {
         // Issue #126: bound tier/seat so they cannot inflate per-ticket
         // storage cost and rent.
         Self::validate_ticket_labels(&tier, &seat)?;
-        let event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&env, event_id, &organizer)?;
         let ticket_id = Self::mint(&env, event_id, to, tier, seat, price);
         Self::increment_tickets_issued(&env, event_id, 1);
         Ok(ticket_id)
@@ -469,10 +457,7 @@ impl TicketingContract {
         if price < 0 {
             return Err(Error::InvalidPrice);
         }
-        let event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&env, event_id, &organizer)?;
         let key = DataKey::TierPrice(event_id, tier);
         env.storage().persistent().set(&key, &price);
         env.storage()
@@ -558,10 +543,7 @@ impl TicketingContract {
     pub fn release_escrow(env: Env, organizer: Address, event_id: u64) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
-        let mut event = Self::get_event_inner(&env, event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        let mut event = Self::require_organizer(&env, event_id, &organizer)?;
         if !event.escrow_enabled {
             return Err(Error::EscrowNotEnabled);
         }
@@ -618,11 +600,7 @@ impl TicketingContract {
         if ticket.owner != from {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::require_not_terminal(&ticket)?;
         let event = Self::get_event_inner(&env, ticket.event_id)?;
         Self::ensure_transfer_allowed(&ticket, &event)?;
         if Self::transfer_frozen(&env, &event) {
@@ -658,11 +636,7 @@ impl TicketingContract {
             if ticket.owner != from {
                 return Err(Error::NotOwner);
             }
-            match ticket.status {
-                TicketStatus::Used => return Err(Error::AlreadyUsed),
-                TicketStatus::Revoked => return Err(Error::Revoked),
-                _ => {}
-            }
+            Self::require_not_terminal(&ticket)?;
             let event = Self::get_event_inner(&env, ticket.event_id)?;
             if Self::transfer_frozen(&env, &event) {
                 return Err(Error::TransfersFrozen);
@@ -697,11 +671,7 @@ impl TicketingContract {
         if ticket.owner != owner {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::require_not_terminal(&ticket)?;
         if ticket.status == TicketStatus::Resale {
             ticket.status = TicketStatus::Valid;
             ticket.resale_price = 0;
@@ -748,11 +718,7 @@ impl TicketingContract {
         if ticket.owner != claim.from {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::require_not_terminal(&ticket)?;
 
         let event = Self::get_event_inner(&env, ticket.event_id)?;
         if Self::transfer_frozen(&env, &event) {
@@ -778,6 +744,17 @@ impl TicketingContract {
     pub fn verify_ticket(env: Env, ticket_id: u64) -> Result<Ticket, Error> {
         Self::extend_instance_ttl(&env);
         Self::get_ticket(env, ticket_id)
+    }
+
+    /// Returns whether a ticket's status permits check-in, without requiring
+    /// its owner's address or returning the full ticket record.
+    ///
+    /// Returns `false` for used, revoked, or resale-listed tickets. Like
+    /// `get_ticket`, errors report an uninitialized contract, missing ticket,
+    /// or invalid stored lifecycle. This query requires no authorization and
+    /// does not renew storage TTL.
+    pub fn is_ticket_valid(env: Env, ticket_id: u64) -> Result<bool, Error> {
+        Ok(Self::get_ticket(env, ticket_id)?.status == TicketStatus::Valid)
     }
 
     /// Returns whether a ticket exists, belongs to `owner`, and is valid for
@@ -823,15 +800,10 @@ impl TicketingContract {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-        let event = Self::get_event_inner(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            TicketStatus::Resale => return Err(Error::ResaleListingActive),
-            _ => {}
+        Self::require_organizer(&env, ticket.event_id, &organizer)?;
+        Self::require_not_terminal(&ticket)?;
+        if ticket.status == TicketStatus::Resale {
+            return Err(Error::ResaleListingActive);
         }
         ticket.status = TicketStatus::Used;
         ticket.resale_price = 0;
@@ -864,15 +836,10 @@ impl TicketingContract {
         }
         for ticket_id in ticket_ids.iter() {
             let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-            let event = Self::get_event_inner(&env, ticket.event_id)?;
-            if event.organizer != organizer {
-                return Err(Error::NotOrganizer);
-            }
-            match ticket.status {
-                TicketStatus::Used => return Err(Error::AlreadyUsed),
-                TicketStatus::Revoked => return Err(Error::Revoked),
-                TicketStatus::Resale => return Err(Error::ResaleListingActive),
-                _ => {}
+            Self::require_organizer(&env, ticket.event_id, &organizer)?;
+            Self::require_not_terminal(&ticket)?;
+            if ticket.status == TicketStatus::Resale {
+                return Err(Error::ResaleListingActive);
             }
             ticket.status = TicketStatus::Used;
             ticket.resale_price = 0;
@@ -899,10 +866,7 @@ impl TicketingContract {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-        let event = Self::get_event_inner(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&env, ticket.event_id, &organizer)?;
         if ticket.status == TicketStatus::Revoked {
             return Err(Error::Revoked);
         }
@@ -926,10 +890,7 @@ impl TicketingContract {
     ) -> Result<(), Error> {
         organizer.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-        let event = Self::get_event_inner(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
+        Self::require_organizer(&env, ticket.event_id, &organizer)?;
         if ticket.status == TicketStatus::Revoked {
             return Err(Error::Revoked);
         }
@@ -958,16 +919,8 @@ impl TicketingContract {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-        let event = Self::get_event_inner(&env, ticket.event_id)?;
-        if event.organizer != organizer {
-            return Err(Error::NotOrganizer);
-        }
-        if ticket.status == TicketStatus::Used {
-            return Err(Error::AlreadyUsed);
-        }
-        if ticket.status == TicketStatus::Revoked {
-            return Err(Error::Revoked);
-        }
+        let event = Self::require_organizer(&env, ticket.event_id, &organizer)?;
+        Self::require_not_terminal(&ticket)?;
         if refund && ticket.original_price > 0 {
             let token_client =
                 token::Client::new(&env, &Self::payment_token_for_event(&env, &event)?);
@@ -997,10 +950,7 @@ impl TicketingContract {
         }
         for ticket_id in ticket_ids.iter() {
             let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-            let event = Self::get_event_inner(&env, ticket.event_id)?;
-            if event.organizer != organizer {
-                return Err(Error::NotOrganizer);
-            }
+            Self::require_organizer(&env, ticket.event_id, &organizer)?;
             if ticket.status == TicketStatus::Revoked {
                 return Err(Error::Revoked);
             }
@@ -1031,11 +981,7 @@ impl TicketingContract {
         if ticket.owner != owner {
             return Err(Error::NotOwner);
         }
-        match ticket.status {
-            TicketStatus::Used => return Err(Error::AlreadyUsed),
-            TicketStatus::Revoked => return Err(Error::Revoked),
-            _ => {}
-        }
+        Self::require_not_terminal(&ticket)?;
         let event = Self::get_event_inner(&env, ticket.event_id)?;
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
@@ -1222,6 +1168,26 @@ impl TicketingContract {
             .unwrap_or(0)
     }
 
+    /// Loads an event and verifies its organizer after the caller has
+    /// required authorization at the entry point.
+    fn require_organizer(env: &Env, event_id: u64, organizer: &Address) -> Result<Event, Error> {
+        let event = Self::get_event_inner(env, event_id)?;
+        if event.organizer != *organizer {
+            return Err(Error::NotOrganizer);
+        }
+        Ok(event)
+    }
+
+    /// Rejects operations that cannot act on used or revoked tickets.
+    /// Resale tickets remain eligible, subject to each operation's rules.
+    fn require_not_terminal(ticket: &Ticket) -> Result<(), Error> {
+        match ticket.status {
+            TicketStatus::Used => Err(Error::AlreadyUsed),
+            TicketStatus::Revoked => Err(Error::Revoked),
+            _ => Ok(()),
+        }
+    }
+
     fn get_event_inner(env: &Env, event_id: u64) -> Result<Event, Error> {
         let mut event: Event = env
             .storage()
@@ -1244,7 +1210,7 @@ impl TicketingContract {
             .persistent()
             .get(&DataKey::Ticket(ticket_id))
             .ok_or(Error::TicketNotFound)?;
-        Self::unpack_ticket(stored)
+        StoredTicket::unpack(stored)
     }
 
     fn increment_tickets_issued(env: &Env, event_id: u64, amount: u64) {
@@ -1288,7 +1254,7 @@ impl TicketingContract {
         let key = DataKey::Ticket(ticket_id);
         env.storage()
             .persistent()
-            .set(&key, &Self::pack_ticket(ticket));
+            .set(&key, &StoredTicket::pack(ticket));
         env.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -1438,52 +1404,6 @@ impl TicketingContract {
         }
         .publish(env);
         ticket_id
-    }
-
-    fn pack_ticket(ticket: &Ticket) -> StoredTicket {
-        StoredTicket {
-            event_id: ticket.event_id,
-            owner: ticket.owner.clone(),
-            tier: ticket.tier.clone(),
-            seat: ticket.seat.clone(),
-            lifecycle: ((ticket.transfers as u64) << 8) | Self::status_code(&ticket.status),
-            original_price: ticket.original_price,
-            resale_price: ticket.resale_price,
-        }
-    }
-
-    fn unpack_ticket(stored: StoredTicket) -> Result<Ticket, Error> {
-        let status_code = stored.lifecycle & 0xff;
-        let transfers = (stored.lifecycle >> 8) as u32;
-        Ok(Ticket {
-            event_id: stored.event_id,
-            owner: stored.owner,
-            tier: stored.tier,
-            seat: stored.seat,
-            status: Self::status_from_code(status_code)?,
-            original_price: stored.original_price,
-            resale_price: stored.resale_price,
-            transfers,
-        })
-    }
-
-    fn status_code(status: &TicketStatus) -> u64 {
-        match status {
-            TicketStatus::Valid => 0,
-            TicketStatus::Used => 1,
-            TicketStatus::Revoked => 2,
-            TicketStatus::Resale => 3,
-        }
-    }
-
-    fn status_from_code(code: u64) -> Result<TicketStatus, Error> {
-        match code {
-            0 => Ok(TicketStatus::Valid),
-            1 => Ok(TicketStatus::Used),
-            2 => Ok(TicketStatus::Revoked),
-            3 => Ok(TicketStatus::Resale),
-            _ => Err(Error::InvalidTicketLifecycle),
-        }
     }
 }
 

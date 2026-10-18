@@ -1,5 +1,21 @@
 # Architecture
 
+## Source layout
+
+The contract entry points and shared authorization/status guards live in
+`contracts/ticketing/src/lib.rs`. `types.rs` owns contract data types and the
+packed ticket lifecycle encoding; `error.rs` owns the error enum. Both modules
+are private, with their public types re-exported from the crate root, so Rust
+consumers continue to import `stellar_tickets_ticketing::{Ticket, Event, Error}`.
+Moving ticket encoding into `types.rs` preserves the public ABI and storage
+format; the isolated move produces byte-identical WASM.
+
+Organizer-authorized operations use `require_organizer` after requiring the
+caller's signature. Operations that reject both used and revoked tickets use
+`require_not_terminal`; check-in additionally rejects resale listings. Plain
+revocation and seat reassignment retain their existing ability to act on used
+tickets, so they only reject revoked tickets.
+
 ## Storage layout
 
 The `ticketing` contract uses instance storage and persistent storage entries:
@@ -80,7 +96,7 @@ Every state-changing function calls `require_auth()` on the account that must ha
 | **Event organizer** (per `Event.organizer`) | `create_event*`, `issue_ticket`, `enable_escrow`, `set_event_payment_token`, `check_in*`, `revoke_ticket*`, `set_seat`, `revoke_batch` | Full control over **their own events only** |
 | **Ticket owner** (per `Ticket.owner`) | `transfer_ticket`, `transfer_batch`, `create_gift_claim`, `list_for_resale`, `cancel_resale` | Only while ticket is `Valid` or `Resale` |
 | **Buyer** (any address) | `purchase_primary`, `buy_resale`, `claim_gift` | Pays and receives ownership atomically |
-| **Anyone** (read-only) | `get_event`, `get_ticket`, `verify_tickets`, `is_valid`, `event_payment_token`, `token_decimals`, `get_organizer_events` | No auth required |
+| **Anyone** (read-only) | `get_event`, `get_ticket`, `verify_tickets`, `is_ticket_valid`, `is_valid`, `event_payment_token`, `token_decimals`, `get_organizer_events` | No auth required |
 
 ### Authorization ordering (critical)
 

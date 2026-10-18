@@ -17,6 +17,8 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `purchase_primary(buyer, event_id, tier, seat, price)`                                      | buyer     | On-chain primary sale + mint                                                                                 |
 | `transfer_ticket(from, ticket_id, to)`                                                      | owner     | Direct transfer                                                                                              |
 | `get_ticket(ticket_id)`                                                                     | anyone    | Canonical read-only ticket lookup                                                                            |
+| `is_ticket_valid(ticket_id)` | anyone | Status-only check-in eligibility; returns `Result<bool, Error>` |
+| `is_valid(ticket_id, owner)` | anyone | Boolean ownership and validity check; errors become `false` |
 | `verify_ticket(ticket_id)`                                                                  | anyone    | Deprecated compatibility alias for `get_ticket`                                                              |
 | `check_in(organizer, ticket_id)`                                                            | organizer | Marks used, one-way                                                                                          |
 | `revoke_ticket(organizer, ticket_id)`                                                       | organizer | Permanently voids                                                                                            |
@@ -32,6 +34,20 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `get_organizer_events(organizer)`                                                           | anyone    | Number of events registered by an organizer                                                                  |
 
 > Resale cutoff semantics: once `ledger_timestamp >= starts_at - resale_cutoff_seconds`, all resale actions reject with `Error::ResaleClosed`. That policy is enforced by the contract's `resale_closed` helper and applies to `list_for_resale`, `buy_resale`, and `cancel_resale`.
+
+## Scanner validity checks
+
+`is_ticket_valid(ticket_id) -> Result<bool, Error>` returns `true` only for
+`TicketStatus::Valid`. Used, revoked, and resale-listed tickets return `false`;
+missing tickets return `TicketNotFound`, and calls before initialization return
+`NotInitialized`. Invalid stored lifecycle codes return `InvalidTicketLifecycle`.
+It requires no signature and does not change ticket data or storage TTL.
+
+The existing `is_valid(ticket_id, owner) -> bool` additionally checks ownership
+and returns `false` on lookup errors. Its signature is retained for deployed
+clients; the status-only query uses a distinct name to preserve that ABI.
+Neither query checks a ticket in: admission must still call `check_in` to mark
+it used and prevent a second admission.
 
 ## `tickets_issued` semantics
 

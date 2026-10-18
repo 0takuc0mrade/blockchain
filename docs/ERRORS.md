@@ -124,6 +124,8 @@ are reachable from a "not found" or a role check.
 | `create_gift_claim` | 5, 7, 8, 9, 26 |
 | `claim_gift` | 3, 5, 7, 8, 9, 20, 23, 24, 25, 33 |
 | `get_ticket` / `verify_ticket` (deprecated) | 5 |
+| `is_ticket_valid` | 2, 5, 43 |
+| `is_valid` | none (lookup errors return `false`) |
 | `verify_tickets` | 5, 27, 28 |
 | `check_in` | 3, 5, 6, 8, 9, 42 |
 | `check_in_batch` | 3, 5, 6, 8, 9, 27, 28, 42 |

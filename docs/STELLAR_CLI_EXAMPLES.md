@@ -357,6 +357,22 @@ stellar contract invoke --id $CONTRACT_ID --network testnet \
 
 ## Ticket verification & check-in
 
+### is_ticket_valid
+
+Check whether a ticket has `Valid` status without reading the full record:
+
+```bash
+stellar contract invoke \
+  --id <contract-id> \
+  --network testnet \
+  -- is_ticket_valid --ticket_id <ticket-id>
+```
+
+Returns `true` for `Valid`, `false` for `Used`, `Revoked`, or `Resale`, and a
+contract error for a missing ticket or uninitialized contract. No signature is
+required. Existing clients can continue calling `is_valid` with `--ticket_id`
+and `--owner` to check both ownership and status.
+
 ### verify_ticket
 
 Look up a ticket's current owner and status (read-only).
