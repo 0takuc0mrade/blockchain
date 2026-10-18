@@ -37,11 +37,16 @@ cargo test -p stellar-tickets-ticketing
 Soroban test snapshots live in
 `contracts/ticketing/test_snapshots/test/`. They record authorization and
 storage state and are reviewed source artifacts, not disposable build output.
-Keep snapshots that correspond to active tests; remove a snapshot only when
-its test is intentionally removed or renamed. After changing contract state
-or authorization behavior, run the relevant test and review the generated
-snapshot diff before committing it. Do not delete the snapshot directory or
-regenerate every snapshot as a cleanup shortcut.
+
+- Commit snapshots only when the underlying contract behavior intentionally
+  changed and the diff matches the new expected state.
+- Keep snapshots for active tests; remove a snapshot only when its test is
+  intentionally deleted or renamed.
+- Do not regenerate the whole snapshot tree as a cleanup shortcut.
+- Before committing a snapshot update, run the focused test that changed the
+  behavior and review the diff.
+- If the contract state or authorization semantics change, keep the snapshot
+  together with the corresponding test in the same patch.
 
 Use a focused test command while updating a snapshot:
 

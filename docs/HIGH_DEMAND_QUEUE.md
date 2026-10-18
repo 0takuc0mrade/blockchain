@@ -1,6 +1,6 @@
 # High-Demand Sale Queue via Commit-Reveal (Design)
 
-Status: design proposal for issue #240. Not yet implemented.
+Status: design-only proposal for issue #240. This queue is not implemented in the current contract; the issue remains a future work item rather than a completed feature.
 
 ## Context
 
@@ -8,7 +8,7 @@ Status: design proposal for issue #240. Not yet implemented.
 lands first in a ledger wins. For high-demand events this favors bots
 that can submit transactions faster and with tighter fee bidding than
 real buyers. [#239](./ARCHITECTURE.md) (ledger-spacing throttle) slows
-down *repeat* purchases by the same address but does nothing for the
+down _repeat_ purchases by the same address but does nothing for the
 initial land-grab across many addresses.
 
 ## Approach: commit-reveal over a lottery
@@ -42,7 +42,7 @@ recommended design.
    remaining supply — see Scaling note below). Order within the reveal
    window is by ledger sequence then transaction order, same as today,
    but since nobody could act on knowledge of other entrants during the
-   commit window, being fast during *reveal* buys nothing an attacker
+   commit window, being fast during _reveal_ buys nothing an attacker
    can plan for in advance.
 
 3. **Purchase window** (after `queue_reveal_deadline_ledger`)

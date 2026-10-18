@@ -1040,9 +1040,7 @@ impl TicketingContract {
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
         }
-        let cap = ticket.original_price * event.max_resale_multiplier_bps as i128
-            / BPS_DENOMINATOR as i128;
-
+        let cap = ticket.original_price * event.max_resale_multiplier_bps as i128 / 10_000;
         if price > cap {
             return Err(Error::ResalePriceExceedsCap);
         }
@@ -1240,7 +1238,7 @@ impl TicketingContract {
 
     fn get_ticket_inner(env: &Env, ticket_id: u64) -> Result<Ticket, Error> {
         let key = DataKey::Ticket(ticket_id);
-        let ticket: Ticket = env
+        let ticket = env
             .storage()
             .persistent()
             .get(&key)
