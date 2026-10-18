@@ -8,6 +8,8 @@ on:
 jobs:
   build-wasm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -17,8 +19,21 @@ jobs:
         run: cargo install --locked stellar-cli --version ^27
       - name: Build contract
         run: stellar contract build
+      - name: Generate checksum
+        run: |
+          sha256sum target/wasm32v1-none/release/stellar_tickets_ticketing.wasm \
+            > target/wasm32v1-none/release/stellar_tickets_ticketing.wasm.sha256
+          cat target/wasm32v1-none/release/stellar_tickets_ticketing.wasm.sha256
       - name: Upload wasm artifact
         uses: actions/upload-artifact@v4
         with:
           name: ticketing-wasm
-          path: target/wasm32v1-none/release/stellar_tickets_ticketing.wasm
+          path: |
+            target/wasm32v1-none/release/stellar_tickets_ticketing.wasm
+            target/wasm32v1-none/release/stellar_tickets_ticketing.wasm.sha256
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/wasm32v1-none/release/stellar_tickets_ticketing.wasm
+            target/wasm32v1-none/release/stellar_tickets_ticketing.wasm.sha256

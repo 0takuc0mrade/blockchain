@@ -1,4 +1,19 @@
 use super::*;
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn resale_royalty_and_seller_split_always_sum_to_price(
+        royalty_bps in 0u32..=10_000u32,
+        price in 0i128..=10_000_000i128,
+    ) {
+        let royalty = price * royalty_bps as i128 / 10_000;
+        let seller_amount = price - royalty;
+
+        prop_assert!(royalty <= price);
+        prop_assert_eq!(royalty + seller_amount, price);
+    }
+}
 
 #[test]
 fn resale_listing_rejects_prices_above_cap() {
@@ -38,14 +53,12 @@ fn resale_price_exactly_at_the_face_value_cap_is_allowed() {
     );
 
     client.list_for_resale(&buyer, &ticket_id, &1_200i128);
- fix/storage-ttl-snapshots
     assert_eq!(
         client.verify_ticket(&ticket_id).status,
         TicketStatus::Resale
     );
 
     assert_eq!(client.get_ticket(&ticket_id).status, TicketStatus::Resale);
- main
 }
 
 #[test]
