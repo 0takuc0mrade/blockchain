@@ -130,6 +130,14 @@ impl TicketingContract {
         // clients always see decimals matching the active payment token
         // (issue #233).
         Self::ensure_token_contract(&env, &new_token)?;
+        // Reject a no-op proposal: proposing the token that is already active
+        // would start the timelock and emit an event for a change that does
+        // nothing (issue #365).
+        if let Ok(current) = Self::payment_token(&env) {
+            if new_token == current {
+                return Err(Error::SamePaymentToken);
+            }
+        }
         let apply_after_ledger = env
             .ledger()
             .sequence()

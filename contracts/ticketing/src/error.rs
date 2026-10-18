@@ -94,4 +94,6 @@ pub enum Error {
     ResaleListingActive = 42,
     /// A stored ticket lifecycle word contains an unknown status code.
     InvalidTicketLifecycle = 43,
+    /// The proposed payment token is the same as the currently active one.
+    SamePaymentToken = 44,
 }
