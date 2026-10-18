@@ -38,14 +38,7 @@ fn resale_price_exactly_at_the_face_value_cap_is_allowed() {
     );
 
     client.list_for_resale(&buyer, &ticket_id, &1_200i128);
- fix/storage-ttl-snapshots
-    assert_eq!(
-        client.verify_ticket(&ticket_id).status,
-        TicketStatus::Resale
-    );
-
     assert_eq!(client.get_ticket(&ticket_id).status, TicketStatus::Resale);
- main
 }
 
 #[test]
@@ -304,6 +297,56 @@ fn resale_listing_and_purchase_close_at_cutoff() {
     token_asset.mint(&buyer, &10_000i128);
     let buy_err = client.try_buy_resale(&buyer, &ticket_id);
     assert_eq!(buy_err, Err(Ok(Error::ResaleClosed)));
+}
+
+#[test]
+fn cancel_resale_rejects_after_the_cutoff_boundary() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let seller = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &seller,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    env.ledger().set_timestamp(9_799);
+    client.list_for_resale(&seller, &ticket_id, &1_100i128);
+
+    env.ledger().set_timestamp(9_800);
+    let cancel_err = client.try_cancel_resale(&seller, &ticket_id);
+    assert_eq!(cancel_err, Err(Ok(Error::ResaleClosed)));
+}
+
+#[test]
+fn resale_is_closed_from_the_start_when_cutoff_exceeds_event_start() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    client.create_event(
+        &organizer,
+        &2,
+        &String::from_str(&env, "Huge cutoff event"),
+        &String::from_str(&env, "concert"),
+        &12_000u32,
+        &500u32,
+        &10_000u64,
+        &100u64,
+        &u64::MAX,
+    );
+    let seller = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &2,
+        &seller,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    let list_err = client.try_list_for_resale(&seller, &ticket_id, &1_100i128);
+    assert_eq!(list_err, Err(Ok(Error::ResaleClosed)));
 }
 
 #[test]
