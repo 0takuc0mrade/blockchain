@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
-members = [
-  "contracts/*",
-]
+members = ["contracts/*"]
+
+[workspace.package]
+rust-version = "1.88.0"
 
 [workspace.dependencies]
 soroban-sdk = "28"

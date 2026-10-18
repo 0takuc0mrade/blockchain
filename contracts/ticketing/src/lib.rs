@@ -193,25 +193,9 @@ impl TicketingContract {
         Ok(())
     }
 
-    /// Registers a new event/route/showing under an organizer. `event_id` is
-    /// chosen by the caller's backend (e.g. a ULID cast to u64) so it can be
-    /// correlated with the off-chain event record.
-    ///
-    /// `category` must use the backend's canonical industry vocabulary: the
-    /// source of truth is the `Category` enum / `CATEGORY_*` constants in this
-    /// crate and the list in [docs/INDUSTRIES.md](../docs/INDUSTRIES.md).
-    pub fn create_event(
-        env: Env,
-        organizer: Address,
-        event_id: u64,
-        name: String,
-        category: String,
-        max_resale_multiplier_bps: u32,
-        royalty_bps: u32,
-        starts_at: u64,
-        transfer_freeze_seconds: u64,
-        resale_cutoff_seconds: u64,
-    ) -> Result<(), Error> {
+    /// Approves an organizer so they may create events. Idempotent: repeated
+    /// approvals leave the allowlist unchanged and just re-emit the event.
+    pub fn approve_organizer(env: Env, admin: Address, organizer: Address) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         Self::require_admin(&env, &admin)?;
         let key = DataKey::ApprovedOrganizer(organizer.clone());
@@ -1221,6 +1205,15 @@ impl TicketingContract {
         Self::bump_ticket_ttl(&env, ticket_id)
     }
 
+    fn bump_ticket_ttl(env: &Env, ticket_id: u64) -> Result<(), Error> {
+        let key = DataKey::Ticket(ticket_id);
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::TicketNotFound);
+        }
+        env.storage().persistent().extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Ok(())
+    }
+
     /// Returns the number of events registered by `organizer`.
     pub fn get_organizer_events(env: Env, organizer: Address) -> u32 {
         env.storage()
@@ -1255,7 +1248,7 @@ impl TicketingContract {
         env.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
-        Ok(())
+        Ok(ticket)
     }
 
     fn increment_tickets_issued(env: &Env, event_id: u64, amount: u64) {

@@ -101,10 +101,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 if [ "$NETWORK" = mainnet ] && [ "$ASSUME_YES" = false ]; then
-  printf 'You are about to deploy to MAINNET. This cannot be undone.\nType "confirm" to continue: '
+  printf 'You are about to deploy to MAINNET. This cannot be undone.\nType "mainnet" to continue: '
   read -r ANSWER || ANSWER=""
-  if [ "$ANSWER" != "confirm" ]; then
-    echo "Aborted: mainnet deployment was not confirmed." >&2
+  if [ "$ANSWER" != "mainnet" ]; then
+    echo "Aborted: mainnet deployment requires typing the network name to confirm." >&2
     exit 1
   fi
 fi

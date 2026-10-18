@@ -10,6 +10,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust MSRV
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.88.0"
+          targets: wasm32v1-none
+
+      - name: Check workspace builds on the declared MSRV
+        run: cargo check --workspace --all-targets
+
   test:
     runs-on: ubuntu-latest
     steps:
