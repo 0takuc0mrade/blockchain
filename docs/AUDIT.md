@@ -25,7 +25,7 @@ The audit covers the core ticketing contract logic in [`contracts/ticketing/src/
 **Prerequisites:**
 
 - Rust 1.70.0 or later (MSRV pinned in [`rust-toolchain.toml`](../rust-toolchain.toml))
-- `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
+- `wasm32v1-none` target: `rustup target add wasm32v1-none`
 - The [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools)
 
 **Building the contract:**
@@ -62,7 +62,7 @@ stellar contract install --source <testnet-key> --network testnet \
 
 ## Test suite
 
-The contract includes 30+ unit tests in [`contracts/ticketing/src/test.rs`](../contracts/ticketing/src/test.rs) covering:
+The contract includes 30+ unit tests in [`contracts/ticketing/src/test/`](../contracts/ticketing/src/test/) covering:
 
 - Happy path for every entry point (issue, transfer, check-in, revoke, resale)
 - Authorization failures (non-organizer, non-owner, admin-only)

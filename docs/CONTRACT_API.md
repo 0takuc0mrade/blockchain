@@ -33,9 +33,18 @@ clients do not break. It may be removed only in a future breaking deployment.
 
 > Resale cutoff semantics: once `ledger_timestamp >= starts_at - resale_cutoff_seconds`, all resale actions reject with `Error::ResaleClosed`. That policy is enforced by the contract's `resale_closed` helper and applies to `list_for_resale`, `buy_resale`, and `cancel_resale`.
 
+## `tickets_issued` semantics
+
+`Event.tickets_issued` (returned by `get_event`) is a **monotonic, lifetime issuance counter** for the event — **not** the active or circulating ticket supply:
+
+- **Incremented on mint:** `issue_ticket` and `purchase_primary` each increment `tickets_issued` by `1`, and `allocate_lottery` increments it by `winner_count`.
+- **Never decremented:** Revoking tickets (`revoke_ticket`, `revoke_with_refund`, `revoke_batch`) or checking them in (`check_in`, `check_in_batch`) transitions the ticket's `status` to `TicketStatus::Revoked` or `TicketStatus::Used`, respectively, without decrementing `tickets_issued`.
+- **Why it is monotonic:** The contract uses `tickets_issued > 0` as a one-way guard to lock event settlement parameters (`enable_escrow`, `set_event_payment_token`) once any ticket has ever been issued, even if all issued tickets are later revoked.
+- **Computing active supply:** Integrators that need the count of currently usable tickets (`TicketStatus::Valid` or `TicketStatus::Resale`) must not read `tickets_issued` as active supply; instead, index on-chain issuance/check-in events and revocation transitions or inspect ticket statuses via `get_ticket` / `verify_tickets`.
+
 ## Error codes
 
 See [`ERRORS.md`](ERRORS.md) for the full table of every `Error` variant
-(1–34), which entry points return each one, and whether it is worth
+(1–41), which entry points return each one, and whether it is worth
 retrying. The enum itself lives in
 [`contracts/ticketing/src/error.rs`](../contracts/ticketing/src/error.rs).

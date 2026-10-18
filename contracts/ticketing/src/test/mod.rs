@@ -14,11 +14,19 @@ use soroban_sdk::{
 };
 
 mod auth;
+mod auth_matrix;
 mod budget;
+mod event_labels;
 mod events;
 pub mod helpers;
+mod organizer_allowlist;
+mod proptests;
 mod resale;
+mod resale_multiplier;
+mod self_transfer;
+mod ticket_labels;
 mod tickets;
 mod transfer_controls;
+mod ttl;
 
 pub use helpers::*;

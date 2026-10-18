@@ -14,13 +14,15 @@ fn create_event_rejects_a_duplicate_event_id() {
     let duplicate = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Other Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &10_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Other Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(duplicate, Err(Ok(Error::EventAlreadyExists)));
 }
@@ -61,13 +63,15 @@ fn create_event_rejects_a_royalty_above_10_000_bps() {
     let bad_royalty = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &10_001u32, // >100%
-        &10_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 10_001, // >100%
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(bad_royalty, Err(Ok(Error::InvalidRoyalty)));
 }
@@ -80,26 +84,30 @@ fn create_event_rejects_past_or_current_timestamp() {
     let in_the_past = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Past Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &999u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Past Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 999,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(in_the_past, Err(Ok(Error::InvalidEventTime)));
 
     let right_now = client.try_create_event(
         &organizer,
         &2,
-        &String::from_str(&env, "Now Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &1_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Now Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 1_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(right_now, Err(Ok(Error::InvalidEventTime)));
 }
@@ -136,25 +144,29 @@ fn events_with_identical_names_have_independent_state() {
     client.create_event(
         &organizer,
         &101u64,
-        &event_name,
-        &category,
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: event_name.clone(),
+            category: category.clone(),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     client.create_event(
         &organizer,
         &102u64,
-        &event_name,
-        &category,
-        &15_000u32,
-        &1_000u32,
-        &20_000u64,
-        &150u64,
-        &300u64,
+        &EventParams {
+            name: event_name,
+            category,
+            max_resale_multiplier_bps: 15_000,
+            royalty_bps: 1_000,
+            starts_at: 20_000,
+            transfer_freeze_seconds: 150,
+            resale_cutoff_seconds: 300,
+        },
     );
 
     let event1 = client.get_event(&101u64);
@@ -203,18 +215,20 @@ fn events_and_tickets_with_unicode_names_and_categories() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
 
     let unicode_name = String::from_str(&env, "東京ライブ 2026 🎵 (Tokyo Live)");
-    let unicode_category = String::from_str(&env, "音楽・コンサート / Festival ✨");
+    let unicode_category = String::from_str(&env, "音楽 / Festival ✨");
 
     client.create_event(
         &organizer,
         &200u64,
-        &unicode_name,
-        &unicode_category,
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: unicode_name.clone(),
+            category: unicode_category.clone(),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     let event = client.get_event(&200u64);
@@ -315,12 +329,12 @@ fn escrowed_primary_sale_holds_funds_in_the_contract() {
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
 
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     let event = client.get_event(&1);
@@ -337,12 +351,12 @@ fn release_escrow_rejects_before_the_event_ends() {
 
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     env.ledger().set_sequence_number(499);
@@ -358,12 +372,12 @@ fn release_escrow_pays_the_organizer_after_the_event_ends() {
 
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     env.ledger().set_sequence_number(500);
@@ -415,12 +429,12 @@ fn per_event_payment_token_routes_settlement() {
     let buyer = Address::generate(&env);
     token2_asset.mint(&buyer, &5_000i128);
 
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     assert_eq!(token2.balance(&organizer), 2_000);
@@ -454,35 +468,108 @@ fn create_event_accepts_a_royalty_of_exactly_10_000_bps() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &10_000u32, // exactly 100%: upper boundary is inclusive
-        &10_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 10_000, // exactly 100%: upper boundary is inclusive
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(client.get_event(&1).royalty_bps, 10_000);
 }
 
-/// Current behaviour: a zero multiplier is accepted at creation, but it makes
-/// the resale cap 0, so every resale listing (price must be > 0) is rejected.
+/// Issue #124: a zero multiplier is no longer accepted. Previously it was
+/// stored and then silently made every resale impossible (cap 0), which is a
+/// dead-end event rather than a valid configuration. The contract now rejects
+/// it at creation with `Error::InvalidMultiplier`; see
+/// `resale_multiplier.rs` for the full boundary coverage.
 #[test]
-fn zero_max_resale_multiplier_event_is_created_but_blocks_all_resale() {
+fn create_event_rejects_zero_max_resale_multiplier() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
-    make_custom_event(&env, &client, &organizer, 1, "Event", "concert", 0, 500, 10_000);
-    assert_eq!(client.get_event(&1).max_resale_multiplier_bps, 0);
-
-    let buyer = Address::generate(&env);
-    let ticket_id = client.issue_ticket(
+    let result = client.try_create_event(
         &organizer,
         &1,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 0,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
+    );
+    assert_eq!(result, Err(Ok(Error::InvalidMultiplier)));
+}
+
+/// #142: `purchase_primary` on an event id that was never created must
+/// surface `Error::EventNotFound` rather than panicking or falling through
+/// to a price/tier lookup on default-initialized state.
+#[test]
+fn purchase_primary_returns_event_not_found_for_a_nonexistent_event() {
+    let (env, client, _token, token_asset, _admin, _organizer) = setup();
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    let result = client.try_purchase_primary(
         &buyer,
+        &999,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &1_000i128,
     );
-    let result = client.try_list_for_resale(&buyer, &ticket_id, &1i128);
-    assert_eq!(result, Err(Ok(Error::ResalePriceExceedsCap)));
-    assert_eq!(client.verify_ticket(&ticket_id).status, TicketStatus::Valid);
+    assert_eq!(result, Err(Ok(Error::EventNotFound)));
+}
+
+/// Issue #373: `release_escrow` resets `escrow_balance` to zero before
+/// transferring funds. Calling it a second time must not pay out again — the
+/// organizer balance must be unchanged after the second call.
+#[test]
+fn release_escrow_pays_out_only_once() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    client.enable_escrow(&organizer, &1, &500u32);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
+    client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // Advance past the escrow release ledger so `release_escrow` is allowed.
+    env.ledger().set_sequence_number(500);
+
+    // First release: escrow_balance (2_000) must be paid to organizer.
+    client.release_escrow(&organizer, &1);
+    let balance_after_first = token.balance(&organizer);
+    assert_eq!(
+        balance_after_first, 2_000,
+        "first release_escrow must transfer the full escrowed amount"
+    );
+    assert_eq!(
+        client.get_event(&1).escrow_balance,
+        0,
+        "escrow_balance must be zero after first release"
+    );
+
+    // Second release: escrow_balance is already 0, so the organizer must
+    // receive nothing additional — the balance must be unchanged.
+    client.release_escrow(&organizer, &1);
+    let balance_after_second = token.balance(&organizer);
+    assert_eq!(
+        balance_after_second, balance_after_first,
+        "second release_escrow must not pay out again"
+    );
+    assert_eq!(
+        client.get_event(&1).escrow_balance,
+        0,
+        "escrow_balance must remain zero after second release"
+    );
 }
