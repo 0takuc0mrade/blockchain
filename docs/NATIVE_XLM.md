@@ -33,7 +33,7 @@ at `initialize`, or move to it later through the two-step
 
 ## Testing with the native asset contract
 
-`contracts/ticketing/src/test.rs` contains a reproducible test-environment
+`contracts/ticketing/src/test/` contains a reproducible test-environment
 setup:
 
 - `register_native_asset_contract(&env)` registers the built-in SAC for
@@ -43,7 +43,7 @@ setup:
 - `create_funded_xlm_account(&env, key, balance)` seeds an account ledger
   entry with lumens so native transfers have a balance to draw from.
 
-Covered flows (`contracts/ticketing/src/test.rs`):
+Covered flows (`contracts/ticketing/src/test/`):
 
 1. `native_xlm_sac_is_accepted_as_payment_token` — initialize with the native
    SAC succeeds and reports 7 decimals.

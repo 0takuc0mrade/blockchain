@@ -1,23 +1,24 @@
 # Supported industries
 
-`Event.category` is a free-text field on-chain; the backend enforces
-a closed set of twelve values so the marketplace and dashboard can
-filter and label consistently:
+`Event.category` is stored as a `String` for ABI compatibility, but the
+backend's source of truth is the shared industry enum used by the service and
+its dashboard. The accepted values are the canonical labels documented by the
+backend and mirrored in the contract's `Category` enum / `CATEGORY_*`
+constants.
 
-Concerts, Flights, Sports, Festivals, Conferences, Bus companies,
-Movie theaters, Museums, Tourist attractions, Public transport,
-Universities, Corporate events.
+The backend-enforced vocabulary includes: Concerts, Flights, Sports,
+Festivals, Conferences, Bus companies, Movie theaters, Museums, Tourist
+attractions, Public transport, Universities, and Corporate events.
 
-Adding a thirteenth industry requires no contract change — only a
-backend enum update (`Industry` in
-[`StellarTickets/backend`](https://github.com/StellarTickets/backend)'s
-Prisma schema) and a frontend label.
+Applications should use those canonical strings (or the `Category` enum values
+exported by the contract) and fall back to `Other` only when a label falls
+outside the shared vocabulary. The contract and backend keep this list in sync;
+no new label should be invented ad hoc.
 
-## Optional on-chain vocabulary
+## Contract-side vocabulary
 
-The contract exports the typed `Category` enum with an `Other` variant and
-the constants `CATEGORY_CONCERT`, `CATEGORY_FLIGHT`, `CATEGORY_SPORTS`,
+The contract exports the typed `Category` enum and the constants
+`CATEGORY_CONCERT`, `CATEGORY_FLIGHT`, `CATEGORY_SPORTS`,
 `CATEGORY_FESTIVAL`, `CATEGORY_CONFERENCE`, and `CATEGORY_OTHER`. These are
-optional client/indexer conventions; `Event.category` remains free text for
-ABI and migration compatibility. Applications should map known strings to a
-`Category` value and use `Other` for labels outside the shared vocabulary.
+the canonical in-contract labels used by clients, and they mirror the backend
+source-of-truth list described above.

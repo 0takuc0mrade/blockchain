@@ -19,7 +19,7 @@ Mainnet deployment is **blocked** until all of the following are satisfied:
 
 ### 2. Code quality & testing ✓
 
-- [x] 30+ unit tests covering all entry points and error cases (in `contracts/ticketing/src/test.rs`)
+- [x] 30+ unit tests covering all entry points and error cases (in `contracts/ticketing/src/test/`)
 - [x] `cargo test` passes locally and in CI
 - [x] `cargo clippy` and `cargo fmt` pass locally and in CI
 - [x] WASM build is reproducible (`stellar contract build`)

@@ -34,5 +34,7 @@ instead of polling `get_ticket` for every ticket on every block.
 |---|---|---|
 | `ContractInitialized` | `initialize` | `admin` (topic), `payment_token` |
 | `PurchaseThrottleUpdated` | `set_purchase_throttle` | `admin` (topic), `min_ledger_spacing` |
+| `OrganizerApproved` | `approve_organizer` | `admin` (topic), `organizer` |
+| `OrganizerRevoked` | `revoke_organizer` | `admin` (topic), `organizer` |
 | `PaymentTokenProposed` | `propose_payment_token` | `admin` (topic), `new_token`, `apply_after_ledger` |
 | `PaymentTokenChanged` | `apply_payment_token` | `admin` (topic), `old_token`, `new_token` |

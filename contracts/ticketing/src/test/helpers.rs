@@ -31,21 +31,41 @@ pub fn setup<'a>() -> (
     let contract_id = env.register(TicketingContract, ());
     let client = TicketingContractClient::new(&env, &contract_id);
     client.initialize(&admin, &token_contract.address());
+    // Event creation is restricted to allowlisted organizers (issue #135).
+    client.approve_organizer(&admin, &organizer);
 
     (env, client, token, token_asset, admin, organizer)
+}
+
+pub fn setup_uninitialized<'a>() -> (Env, TicketingContractClient<'a>, Address, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let organizer = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+
+    let contract_id = env.register(TicketingContract, ());
+    let client = TicketingContractClient::new(&env, &contract_id);
+
+    (env, client, token_contract.address(), admin, organizer)
 }
 
 pub fn make_event(env: &Env, client: &TicketingContractClient, organizer: &Address, event_id: u64) {
     client.create_event(
         organizer,
         &event_id,
-        &String::from_str(env, "Radiohead Live"),
-        &String::from_str(env, "concert"),
-        &12_000u32, // max 120% of face value on resale
-        &500u32,    // 5% organizer royalty
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(env, "Radiohead Live"),
+            category: String::from_str(env, "concert"),
+            max_resale_multiplier_bps: 12_000, // max 120% of face value on resale
+            royalty_bps: 500,                  // 5% organizer royalty
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 }
 
@@ -63,13 +83,15 @@ pub fn make_custom_event(
     client.create_event(
         organizer,
         &event_id,
-        &String::from_str(env, name),
-        &String::from_str(env, category),
-        &max_resale_multiplier_bps,
-        &royalty_bps,
-        &starts_at,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(env, name),
+            category: String::from_str(env, category),
+            max_resale_multiplier_bps,
+            royalty_bps,
+            starts_at,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 }
 

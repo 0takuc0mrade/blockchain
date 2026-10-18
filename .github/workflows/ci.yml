@@ -18,7 +18,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -38,6 +38,11 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Proptest
+        env:
+          PROPTEST_CASES: 64
+        run: cargo test --workspace prop
+
   build-wasm:
     runs-on: ubuntu-latest
     needs: test
@@ -47,7 +52,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -58,14 +63,17 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install Stellar CLI
+        uses: stellar/stellar-cli@v27.1.0
+
       - name: Build optimized WASM
-        run: cargo build -p stellar-tickets-ticketing --target wasm32-unknown-unknown --release
+        run: stellar contract build
 
       - name: Check WASM size
         env:
           WASM_MAX_BYTES: 524288
         run: |
-          wasm_path="target/wasm32-unknown-unknown/release/stellar_tickets_ticketing.wasm"
+          wasm_path="target/wasm32v1-none/release/stellar_tickets_ticketing.wasm"
           wasm_size=$(stat -c%s "$wasm_path")
           echo "WASM size: ${wasm_size} bytes (limit: ${WASM_MAX_BYTES} bytes)"
           test "$wasm_size" -le "$WASM_MAX_BYTES"

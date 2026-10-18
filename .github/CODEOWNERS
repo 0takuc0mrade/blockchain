@@ -1,2 +1,29 @@
 # Default owners for everything in the repo
 * @presidojay1
+
+# Contracts
+/contracts/ @presidojay1
+
+# Documentation
+/docs/ @presidojay1
+
+# GitHub workflows and configuration
+/.github/ @presidojay1
+
+# Scripts
+/scripts/ @presidojay1
+
+# Examples
+/examples/ @presidojay1
+
+# Root configuration files
+/Cargo.toml @presidojay1
+/Cargo.lock @presidojay1
+/Makefile @presidojay1
+/rust-toolchain.toml @presidojay1
+/rustfmt.toml @presidojay1
+/deny.toml @presidojay1
+/.editorconfig @presidojay1
+/.gitignore @presidojay1
+/.gitattributes @presidojay1
+/.typos.toml @presidojay1

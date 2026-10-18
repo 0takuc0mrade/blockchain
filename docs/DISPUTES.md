@@ -112,4 +112,4 @@ have `release_escrow` transfer only `escrow_balance - disputed_balance`.
   follow-up PR once the design is agreed, adding `Dispute`,
   `DisputeStatus`, the four new errors, and the three new entry points
   described here, plus tests mirroring the existing `escrow_*` and
-  `purchase_throttle_*` test style in `contracts/ticketing/src/test.rs`.
+  `purchase_throttle_*` test style in `contracts/ticketing/src/test/`.

@@ -58,3 +58,21 @@ pub struct TicketCheckedIn {
     pub ticket_id: u64,
     pub organizer: Address,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin adds an organizer to the event-creation allowlist.
+pub struct OrganizerApproved {
+    #[topic]
+    pub admin: Address,
+    pub organizer: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when the admin removes an organizer from the event-creation allowlist.
+pub struct OrganizerRevoked {
+    #[topic]
+    pub admin: Address,
+    pub organizer: Address,
+}

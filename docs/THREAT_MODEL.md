@@ -92,6 +92,8 @@ main defense against a compromised admin key.
 | Replay a signature from another call | Soroban auth entries are bound to the invocation's arguments and the contract ID; a signature for one call does not authorize another |
 | Organizer of event A acts on event B's tickets | Each organizer check compares against the *ticket's* event, and ticket ids are globally unique, so a cross-event mix-up is not constructible |
 | Compromised admin mints or revokes tickets | The admin has no per-ticket powers at all; `NotAdmin` is the only thing it can trigger |
+| Squat on the backend's chosen `event_id` before the organizer registers it | Event creation is restricted to admin-approved organizers (`OrganizerNotApproved`); see [ORGANIZER_ALLOWLIST.md](ORGANIZER_ALLOWLIST.md) |
+| A mutating entry point silently loses its `require_auth()` | `test/auth_matrix.rs` calls every mutating entry point unsigned and asserts a host auth failure, then signed and asserts the expected signer |
 | Unauthorized caller learns ticket state from error codes | Entry points demand auth as their first statement, so an unauthenticated caller learns nothing about existence, ownership or status from the error returned |
 
 The last row has one documented exception, described under
