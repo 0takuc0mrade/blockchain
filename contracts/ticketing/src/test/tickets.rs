@@ -209,6 +209,50 @@ fn direct_transfer_freezes_at_configured_window() {
 }
 
 #[test]
+fn transfer_frozen_handles_freeze_longer_than_event_lead_time() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    // starts_at = 1_000, transfer_freeze_seconds = 5_000 (> starts_at)
+    // saturating_sub clamps the freeze start to 0, so transfers are frozen immediately at timestamp 0.
+    client.create_event(
+        &organizer,
+        &1,
+        &EventParams {
+            name: String::from_str(&env, "Short Lead Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 1_000,
+            transfer_freeze_seconds: 5_000,
+            resale_cutoff_seconds: 0,
+        },
+    );
+
+    let buyer = Address::generate(&env);
+    let friend = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    env.ledger().set_timestamp(0);
+    assert_eq!(
+        client.try_transfer_ticket(&buyer, &ticket_id, &friend),
+        Err(Ok(Error::TransfersFrozen))
+    );
+
+    let mut batch = Vec::new(&env);
+    batch.push_back(ticket_id);
+    assert_eq!(
+        client.try_transfer_batch(&buyer, &batch, &friend),
+        Err(Ok(Error::TransfersFrozen))
+    );
+}
+
+#[test]
 fn transfer_batch_moves_all_tickets_atomically() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
     make_event(&env, &client, &organizer, 1);
@@ -572,4 +616,49 @@ fn verify_tickets_returns_all_tickets() {
     assert_eq!(results.len(), 2);
     assert_eq!(results.get(0).unwrap().original_price, 1_000);
     assert_eq!(results.get(1).unwrap().original_price, 2_000);
+}
+
+#[test]
+fn revoke_does_not_decrement_tickets_issued() {
+    let (env, client, _token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+    token_asset.mint(&organizer, &10_000i128);
+
+    let t1 = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+    let t2 = client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "2"),
+        &1_000i128,
+    );
+    let t3 = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "3"),
+        &1_000i128,
+    );
+    assert_eq!(client.get_event(&1).tickets_issued, 3);
+
+    client.revoke_ticket(&organizer, &t1);
+    assert_eq!(client.get_event(&1).tickets_issued, 3);
+
+    client.revoke_with_refund(&organizer, &t2, &true);
+    assert_eq!(client.get_event(&1).tickets_issued, 3);
+
+    let mut batch = Vec::new(&env);
+    batch.push_back(t3);
+    client.revoke_batch(&organizer, &batch);
+    assert_eq!(client.get_event(&1).tickets_issued, 3);
 }

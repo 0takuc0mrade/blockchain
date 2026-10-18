@@ -154,13 +154,15 @@ fn buy_resale_with_zero_royalty_pays_the_seller_in_full() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "No Royalty Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &0u32, // 0% royalty
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "No Royalty Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 0, // 0% royalty
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     let seller = Address::generate(&env);
     let buyer = Address::generate(&env);

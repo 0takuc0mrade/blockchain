@@ -14,13 +14,15 @@ fn create_event_rejects_a_duplicate_event_id() {
     let duplicate = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Other Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &10_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Other Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(duplicate, Err(Ok(Error::EventAlreadyExists)));
 }
@@ -31,13 +33,15 @@ fn create_event_rejects_a_royalty_above_10_000_bps() {
     let bad_royalty = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &10_001u32, // >100%
-        &10_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 10_001, // >100%
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(bad_royalty, Err(Ok(Error::InvalidRoyalty)));
 }
@@ -50,26 +54,30 @@ fn create_event_rejects_past_or_current_timestamp() {
     let in_the_past = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Past Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &999u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Past Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 999,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(in_the_past, Err(Ok(Error::InvalidEventTime)));
 
     let right_now = client.try_create_event(
         &organizer,
         &2,
-        &String::from_str(&env, "Now Event"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &0u32,
-        &1_000u64,
-        &0u64,
-        &0u64,
+        &EventParams {
+            name: String::from_str(&env, "Now Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 0,
+            starts_at: 1_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
     );
     assert_eq!(right_now, Err(Ok(Error::InvalidEventTime)));
 }
@@ -106,25 +114,29 @@ fn events_with_identical_names_have_independent_state() {
     client.create_event(
         &organizer,
         &101u64,
-        &event_name,
-        &category,
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: event_name.clone(),
+            category: category.clone(),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     client.create_event(
         &organizer,
         &102u64,
-        &event_name,
-        &category,
-        &15_000u32,
-        &1_000u32,
-        &20_000u64,
-        &150u64,
-        &300u64,
+        &EventParams {
+            name: event_name,
+            category,
+            max_resale_multiplier_bps: 15_000,
+            royalty_bps: 1_000,
+            starts_at: 20_000,
+            transfer_freeze_seconds: 150,
+            resale_cutoff_seconds: 300,
+        },
     );
 
     let event1 = client.get_event(&101u64);
@@ -178,13 +190,15 @@ fn events_and_tickets_with_unicode_names_and_categories() {
     client.create_event(
         &organizer,
         &200u64,
-        &unicode_name,
-        &unicode_category,
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: unicode_name.clone(),
+            category: unicode_category.clone(),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     let event = client.get_event(&200u64);

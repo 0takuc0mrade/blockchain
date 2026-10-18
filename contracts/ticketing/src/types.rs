@@ -17,7 +17,28 @@ pub enum TicketStatus {
     Resale,
 }
 
-/// An event, route, or showing registered by an organizer.
+/// Configuration parameters for registering an event via `create_event`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EventParams {
+    /// Display name of the event.
+    pub name: String,
+    /// Category such as "concert", "flight", "sports", "conference", etc.
+    pub category: String,
+    /// Basis points cap on resale price relative to original sale price
+    /// (e.g. 12000 = 120%). Anti-scalping enforcement.
+    pub max_resale_multiplier_bps: u32,
+    /// Basis points of every resale price paid to the organizer as royalty.
+    pub royalty_bps: u32,
+    /// Ledger timestamp at which the event starts.
+    pub starts_at: u64,
+    /// Seconds before `starts_at` after which direct transfers are frozen.
+    pub transfer_freeze_seconds: u64,
+    /// Seconds before `starts_at` after which resale listings are closed.
+    pub resale_cutoff_seconds: u64,
+}
+
+/// An event registered by an organizer.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Event {
@@ -39,7 +60,10 @@ pub struct Event {
     pub max_transfers_per_ticket: Option<u32>,
     /// Basis points of every resale price paid to the organizer as royalty.
     pub royalty_bps: u32,
-    /// Number of tickets issued for the event so far.
+    /// Cumulative number of tickets ever minted for the event (`issue_ticket`,
+    /// `purchase_primary`, `allocate_lottery`). Monotonic — never decremented
+    /// when a ticket is revoked or checked in, so revoked tickets still count
+    /// toward this total. Do not read this field as active supply.
     pub tickets_issued: u64,
     /// Ledger timestamp at which the event starts.
     pub starts_at: u64,
