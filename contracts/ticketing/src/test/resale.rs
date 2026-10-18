@@ -520,13 +520,15 @@ fn resale_is_closed_from_the_start_when_cutoff_exceeds_event_start() {
     client.create_event(
         &organizer,
         &2,
-        &String::from_str(&env, "Huge cutoff event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &u64::MAX,
+        &EventParams {
+            name: String::from_str(&env, "Huge cutoff event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: u64::MAX,
+        },
     );
     let seller = Address::generate(&env);
     let ticket_id = client.issue_ticket(
