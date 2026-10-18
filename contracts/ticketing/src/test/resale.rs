@@ -714,3 +714,97 @@ fn resale_cap_boundary_with_rounding_truncates_down() {
         assert_eq!(ticket.resale_price, expected_cap);
     }
 }
+
+/// Issue #371: `create_gift_claim` on a ticket that is currently listed for
+/// resale must atomically clear the listing — `status` returns to `Valid` and
+/// `resale_price` returns to 0 — before the claim is stored.
+#[test]
+fn create_gift_claim_on_resale_ticket_returns_status_to_valid_and_clears_price() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    // List the ticket so it enters Resale status with a non-zero price.
+    client.list_for_resale(&owner, &ticket_id, &1_100i128);
+    let listed = client.get_ticket(&ticket_id);
+    assert_eq!(listed.status, TicketStatus::Resale);
+    assert_eq!(listed.resale_price, 1_100);
+
+    // Creating a gift claim must cancel the listing before storing the claim.
+    let secret_bytes = Bytes::from_array(&env, &[7u8; 32]);
+    let secret_hash = env.crypto().sha256(&secret_bytes).to_bytes();
+    client.create_gift_claim(&owner, &ticket_id, &secret_hash, &5_000u64);
+
+    let ticket = client.get_ticket(&ticket_id);
+    assert_eq!(ticket.status, TicketStatus::Valid,
+        "status must return to Valid after create_gift_claim on a listed ticket");
+    assert_eq!(ticket.resale_price, 0,
+        "resale_price must be cleared after create_gift_claim on a listed ticket");
+}
+
+/// Issue #374: `buy_resale` settles using `payment_token_for_event`, so when
+/// a per-event payment token is configured the royalty and seller proceeds
+/// must be denominated in that token, not the contract-wide token.
+#[test]
+fn buy_resale_settles_in_per_event_payment_token() {
+    let (env, client, default_token, _default_token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1); // 5% royalty, 120% cap
+
+    // Deploy a second token and configure it as the per-event payment token.
+    let event_token_admin = Address::generate(&env);
+    let event_token_contract = env.register_stellar_asset_contract_v2(event_token_admin);
+    let event_token = TokenClient::new(&env, &event_token_contract.address());
+    let event_token_asset = StellarAssetClient::new(&env, &event_token_contract.address());
+
+    client.set_event_payment_token(&organizer, &1, &Some(event_token_contract.address()));
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+
+    // Issue the ticket (off-chain settlement — no on-chain token movement at issuance).
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &seller,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    // List for resale at a price within the 120% cap.
+    client.list_for_resale(&seller, &ticket_id, &1_100i128);
+
+    // Fund the buyer with the per-event token and execute the resale.
+    event_token_asset.mint(&buyer, &10_000i128);
+    client.buy_resale(&buyer, &ticket_id);
+
+    // 5% of 1_100 = 55 royalty to organizer, 1_045 to seller — all in the
+    // per-event token.
+    assert_eq!(event_token.balance(&organizer), 55,
+        "organizer royalty must be paid in the per-event token");
+    assert_eq!(event_token.balance(&seller), 1_045,
+        "seller proceeds must be paid in the per-event token");
+    assert_eq!(event_token.balance(&buyer), 10_000 - 1_100,
+        "buyer must pay using the per-event token");
+
+    // The contract-wide token must be untouched.
+    assert_eq!(default_token.balance(&organizer), 0,
+        "default token must not be touched during a per-event-token resale");
+    assert_eq!(default_token.balance(&seller), 0,
+        "default token must not be touched during a per-event-token resale");
+
+    // Ownership must have transferred.
+    let ticket = client.get_ticket(&ticket_id);
+    assert_eq!(ticket.owner, buyer);
+    assert_eq!(ticket.status, TicketStatus::Valid);
+    assert_eq!(ticket.resale_price, 0);
+}

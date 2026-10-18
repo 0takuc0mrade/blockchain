@@ -504,3 +504,44 @@ fn purchase_primary_returns_event_not_found_for_a_nonexistent_event() {
     );
     assert_eq!(result, Err(Ok(Error::EventNotFound)));
 }
+
+/// Issue #373: `release_escrow` resets `escrow_balance` to zero before
+/// transferring funds. Calling it a second time must not pay out again — the
+/// organizer balance must be unchanged after the second call.
+#[test]
+fn release_escrow_pays_out_only_once() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    client.enable_escrow(&organizer, &1, &500u32);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
+    client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // Advance past the escrow release ledger so `release_escrow` is allowed.
+    env.ledger().set_sequence_number(500);
+
+    // First release: escrow_balance (2_000) must be paid to organizer.
+    client.release_escrow(&organizer, &1);
+    let balance_after_first = token.balance(&organizer);
+    assert_eq!(balance_after_first, 2_000,
+        "first release_escrow must transfer the full escrowed amount");
+    assert_eq!(client.get_event(&1).escrow_balance, 0,
+        "escrow_balance must be zero after first release");
+
+    // Second release: escrow_balance is already 0, so the organizer must
+    // receive nothing additional — the balance must be unchanged.
+    client.release_escrow(&organizer, &1);
+    let balance_after_second = token.balance(&organizer);
+    assert_eq!(balance_after_second, balance_after_first,
+        "second release_escrow must not pay out again");
+    assert_eq!(client.get_event(&1).escrow_balance, 0,
+        "escrow_balance must remain zero after second release");
+}

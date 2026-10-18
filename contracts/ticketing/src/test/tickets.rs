@@ -1199,3 +1199,55 @@ fn revoke_batch_rejects_already_revoked_ticket() {
     let result = client.try_revoke_batch(&organizer, &batch);
     assert_eq!(result, Err(Ok(Error::Revoked)));
 }
+
+/// Issue #372: `claim_gift` internally calls `transfer_frozen`, but no test
+/// confirms that the claim is rejected once the event enters its transfer
+/// freeze window. Create a claim while transfers are open, advance the ledger
+/// timestamp into the freeze window, then assert `TransfersFrozen`.
+#[test]
+fn claim_gift_is_rejected_during_transfer_freeze_window() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    // make_event: starts_at = 10_000, transfer_freeze_seconds = 100
+    // → freeze begins at timestamp 9_900
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    // Create the gift claim before the freeze window opens.
+    let secret_bytes = Bytes::from_array(&env, &[55u8; 32]);
+    let secret_hash = env.crypto().sha256(&secret_bytes).to_bytes();
+    // expires_at = 20_000 so the claim is still live when the freeze starts.
+    client.create_gift_claim(&owner, &ticket_id, &secret_hash, &20_000u64);
+
+    // Confirm claiming succeeds just before the freeze boundary.
+    env.ledger().set_timestamp(9_899);
+    // Re-create the claim because it was consumed, or use a fresh ticket.
+    let ticket_id2 = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+    let secret2_bytes = Bytes::from_array(&env, &[56u8; 32]);
+    let secret2_hash = env.crypto().sha256(&secret2_bytes).to_bytes();
+    client.create_gift_claim(&owner, &ticket_id2, &secret2_hash, &20_000u64);
+    client.claim_gift(&recipient, &ticket_id2, &secret2_bytes);
+    assert_eq!(client.get_ticket(&ticket_id2).owner, recipient);
+
+    // Now step into the freeze window and assert the claim on the first ticket fails.
+    env.ledger().set_timestamp(9_900);
+    let frozen = client.try_claim_gift(&recipient, &ticket_id, &secret_bytes);
+    assert_eq!(frozen, Err(Ok(Error::TransfersFrozen)),
+        "claim_gift must be rejected once the transfer freeze window is active");
+}
