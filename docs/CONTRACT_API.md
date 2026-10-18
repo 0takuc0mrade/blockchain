@@ -20,6 +20,9 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `set_tier_price(organizer, event_id, tier, price)` | organizer | Sets the primary sale price for a tier (issue #127) |
 | `purchase_primary(buyer, event_id, tier, seat)` | buyer | On-chain primary sale at the tier price + mint |
 | `transfer_ticket(from, ticket_id, to)` | owner | Direct transfer |
+| `transfer_batch(from, ticket_ids, to)` | owner | Batch direct transfer (max 100 tickets) |
+| `create_gift_claim(owner, ticket_id, secret_hash, expires_at)` | owner | Creates a hash-locked gift claim; the owner shares the preimage off-chain. See [`STELLAR_CLI_EXAMPLES.md`](STELLAR_CLI_EXAMPLES.md#create_gift_claim) for the SHA-256 workflow |
+| `claim_gift(recipient, ticket_id, secret)` | recipient | Claims a gifted ticket by presenting the preimage before expiry. See [`STELLAR_CLI_EXAMPLES.md`](STELLAR_CLI_EXAMPLES.md#claim_gift) |
 | `get_ticket(ticket_id)` | anyone | Canonical read-only ticket lookup |
 | `verify_ticket(ticket_id)` | anyone | Deprecated compatibility alias for `get_ticket` |
 | `check_in(organizer, ticket_id)` | organizer | Marks used, one-way |
