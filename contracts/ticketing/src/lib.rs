@@ -193,9 +193,25 @@ impl TicketingContract {
         Ok(())
     }
 
-    /// Adds `organizer` to the allowlist of addresses permitted to create
-    /// events (issue #135). Idempotent. See `docs/ORGANIZER_ALLOWLIST.md`.
-    pub fn approve_organizer(env: Env, admin: Address, organizer: Address) -> Result<(), Error> {
+    /// Registers a new event/route/showing under an organizer. `event_id` is
+    /// chosen by the caller's backend (e.g. a ULID cast to u64) so it can be
+    /// correlated with the off-chain event record.
+    ///
+    /// `category` must use the backend's canonical industry vocabulary: the
+    /// source of truth is the `Category` enum / `CATEGORY_*` constants in this
+    /// crate and the list in [docs/INDUSTRIES.md](../docs/INDUSTRIES.md).
+    pub fn create_event(
+        env: Env,
+        organizer: Address,
+        event_id: u64,
+        name: String,
+        category: String,
+        max_resale_multiplier_bps: u32,
+        royalty_bps: u32,
+        starts_at: u64,
+        transfer_freeze_seconds: u64,
+        resale_cutoff_seconds: u64,
+    ) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         Self::require_admin(&env, &admin)?;
         let key = DataKey::ApprovedOrganizer(organizer.clone());
@@ -415,7 +431,6 @@ impl TicketingContract {
     /// (issue #235).
     pub fn event_payment_token(env: Env, event_id: u64) -> Result<Address, Error> {
         Self::extend_instance_ttl(&env);
-        Self::require_initialized(&env)?;
         let event = Self::get_event_inner(&env, event_id)?;
         Self::payment_token_for_event(&env, &event)
     }
@@ -777,15 +792,15 @@ impl TicketingContract {
     /// new integrations should call `get_ticket`.
     #[deprecated(note = "use get_ticket; verify_ticket is retained for ABI compatibility")]
     pub fn verify_ticket(env: Env, ticket_id: u64) -> Result<Ticket, Error> {
-        Self::require_initialized(&env)?;
-        Self::get_ticket_inner(&env, ticket_id)
+        Self::extend_instance_ttl(&env);
+        Self::get_ticket(env, ticket_id)
     }
 
     /// Returns whether a ticket exists, belongs to `owner`, and is valid for
     /// entry. Missing tickets return `false` so scanners can use this as a
     /// single boolean check without handling a contract error.
     pub fn is_valid(env: Env, ticket_id: u64, owner: Address) -> bool {
-        match Self::get_ticket_inner(&env, ticket_id) {
+        match Self::get_ticket(env, ticket_id) {
             Ok(ticket) => ticket.owner == owner && ticket.status == TicketStatus::Valid,
             Err(_) => false,
         }
@@ -975,6 +990,7 @@ impl TicketingContract {
             token_client.transfer(&organizer, &ticket.owner, &ticket.original_price);
         }
         ticket.status = TicketStatus::Revoked;
+        ticket.resale_price = 0;
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
         Ok(())
@@ -1042,6 +1058,7 @@ impl TicketingContract {
         }
         let cap = ticket.original_price * event.max_resale_multiplier_bps as i128
             / BPS_DENOMINATOR as i128;
+
         if price > cap {
             return Err(Error::ResalePriceExceedsCap);
         }
@@ -1060,16 +1077,25 @@ impl TicketingContract {
 
     /// Cancels a ticket's resale listing, returning its status to valid.
     ///
+    /// Resale actions close at the event cutoff, so once the current ledger time
+    /// reaches `starts_at - resale_cutoff_seconds`, this rejects with
+    /// `Error::ResaleClosed` even when the listing still exists.
+    ///
     /// # Errors
     ///
     /// Returns `Error::NotOwner` if the caller is not the ticket's owner.
     /// Returns `Error::NotForResale` if the ticket is not currently listed for resale.
+    /// Returns `Error::ResaleClosed` once the cutoff has been reached.
     pub fn cancel_resale(env: Env, owner: Address, ticket_id: u64) -> Result<(), Error> {
         Self::extend_instance_ttl(&env);
         owner.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
         if ticket.owner != owner {
             return Err(Error::NotOwner);
+        }
+        let event = Self::get_event_inner(&env, ticket.event_id)?;
+        if Self::resale_closed(&env, &event) {
+            return Err(Error::ResaleClosed);
         }
         if ticket.status != TicketStatus::Resale {
             return Err(Error::NotForResale);
@@ -1221,19 +1247,11 @@ impl TicketingContract {
 
     fn get_ticket_inner(env: &Env, ticket_id: u64) -> Result<Ticket, Error> {
         let key = DataKey::Ticket(ticket_id);
-        let stored: StoredTicket = env
+        let ticket: Ticket = env
             .storage()
             .persistent()
             .get(&key)
             .ok_or(Error::TicketNotFound)?;
-        Self::unpack_ticket(stored)
-    }
-
-    fn bump_ticket_ttl(env: &Env, ticket_id: u64) -> Result<(), Error> {
-        let key = DataKey::Ticket(ticket_id);
-        if !env.storage().persistent().has(&key) {
-            return Err(Error::TicketNotFound);
-        }
         env.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);

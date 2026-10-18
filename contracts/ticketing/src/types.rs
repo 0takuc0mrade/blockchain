@@ -71,8 +71,11 @@ pub struct Event {
     /// Display name of the event.
     pub name: String,
     /// Category such as "concert", "flight", "sports", "conference", etc.
-    /// Kept as free text metadata rather than a fixed enum so new industries
-    /// don't require a contract migration.
+    /// Source of truth: the backend enforces the shared industry list in
+    /// [docs/INDUSTRIES.md](../../docs/INDUSTRIES.md) and the `Category` enum/
+    /// `CATEGORY_*` constants exported by this contract. The storage field is a
+    /// `String` for ABI compatibility, but callers must use the canonical
+    /// backend vocabulary rather than inventing new labels.
     pub category: String,
     /// Basis points cap on resale price relative to original sale price
     /// (e.g. 12000 = 120%). Anti-scalping enforcement.
