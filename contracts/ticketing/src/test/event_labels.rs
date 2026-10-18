@@ -14,13 +14,15 @@ fn create_event_rejects_empty_name() {
     let result = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, ""),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, ""),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     assert_eq!(result, Err(Ok(Error::EmptyNameOrCategory)));
 }
@@ -32,13 +34,15 @@ fn create_event_rejects_empty_category() {
     let result = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Radiohead Live"),
-        &String::from_str(&env, ""),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Radiohead Live"),
+            category: String::from_str(&env, ""),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     assert_eq!(result, Err(Ok(Error::EmptyNameOrCategory)));
 }
@@ -51,13 +55,15 @@ fn create_event_rejects_whitespace_free_single_char_boundary() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "A"),
-        &String::from_str(&env, "c"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "A"),
+            category: String::from_str(&env, "c"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     let event = client.get_event(&1);
     assert_eq!(event.name.len(), 1);
@@ -74,13 +80,15 @@ fn create_event_accepts_labels_at_the_maximum_length() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, &name),
-        &String::from_str(&env, &category),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, &name),
+            category: String::from_str(&env, &category),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     let event = client.get_event(&1);
     assert_eq!(event.name.len(), MAX_NAME_LEN);
@@ -95,13 +103,15 @@ fn create_event_rejects_oversized_name() {
     let result = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, &name),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, &name),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     assert_eq!(result, Err(Ok(Error::StringTooLong)));
 }
@@ -114,13 +124,15 @@ fn create_event_rejects_oversized_category() {
     let result = client.try_create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Radiohead Live"),
-        &String::from_str(&env, &category),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Radiohead Live"),
+            category: String::from_str(&env, &category),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     assert_eq!(result, Err(Ok(Error::StringTooLong)));
 }
@@ -132,13 +144,15 @@ fn create_event_with_options_rejects_empty_name() {
     let result = client.try_create_event_with_options(
         &organizer,
         &1,
-        &String::from_str(&env, ""),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, ""),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
         &None,
         &None,
     );
@@ -152,13 +166,15 @@ fn rejected_event_is_not_persisted() {
     let _ = client.try_create_event(
         &organizer,
         &7,
-        &String::from_str(&env, ""),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, ""),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     assert_eq!(client.try_get_event(&7), Err(Ok(Error::EventNotFound)));

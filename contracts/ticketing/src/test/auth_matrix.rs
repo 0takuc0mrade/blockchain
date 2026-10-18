@@ -183,13 +183,15 @@ fn create_event_requires_auth() {
         client.try_create_event(
             &organizer,
             &1,
-            &s(&env, "Show"),
-            &s(&env, "concert"),
-            &12_000u32,
-            &500u32,
-            &10_000u64,
-            &100u64,
-            &200u64,
+            &EventParams {
+                name: s(&env, "Show"),
+                category: s(&env, "concert"),
+                max_resale_multiplier_bps: 12_000,
+                royalty_bps: 500,
+                starts_at: 10_000,
+                transfer_freeze_seconds: 100,
+                resale_cutoff_seconds: 200,
+            },
         )
     );
 }
@@ -206,13 +208,15 @@ fn create_event_with_options_requires_auth() {
         client.try_create_event_with_options(
             &organizer,
             &1,
-            &s(&env, "Show"),
-            &s(&env, "concert"),
-            &12_000u32,
-            &500u32,
-            &10_000u64,
-            &100u64,
-            &200u64,
+            &EventParams {
+                name: s(&env, "Show"),
+                category: s(&env, "concert"),
+                max_resale_multiplier_bps: 12_000,
+                royalty_bps: 500,
+                starts_at: 10_000,
+                transfer_freeze_seconds: 100,
+                resale_cutoff_seconds: 200,
+            },
             &Some(10_000u32),
             &Some(3u32),
         )

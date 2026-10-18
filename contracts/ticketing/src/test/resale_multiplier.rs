@@ -17,13 +17,15 @@ fn create_event_rejects_multiplier_below_face_value() {
         let result = client.try_create_event(
             &organizer,
             &1,
-            &String::from_str(&env, "Below Face Value"),
-            &String::from_str(&env, "concert"),
-            &bps,
-            &500u32,
-            &10_000u64,
-            &100u64,
-            &200u64,
+            &EventParams {
+                name: String::from_str(&env, "Below Face Value"),
+                category: String::from_str(&env, "concert"),
+                max_resale_multiplier_bps: bps,
+                royalty_bps: 500,
+                starts_at: 10_000,
+                transfer_freeze_seconds: 100,
+                resale_cutoff_seconds: 200,
+            },
         );
         assert_eq!(result, Err(Ok(Error::InvalidMultiplier)));
     }
@@ -36,13 +38,15 @@ fn create_event_accepts_multiplier_exactly_at_face_value() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Face Value Only"),
-        &String::from_str(&env, "concert"),
-        &10_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Face Value Only"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 10_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     let event = client.get_event(&1);
@@ -56,13 +60,15 @@ fn create_event_accepts_multiplier_above_face_value() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Above Face Value"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Above Face Value"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
 
     let event = client.get_event(&1);
@@ -98,13 +104,15 @@ fn create_event_with_options_rejects_multiplier_below_face_value() {
     let result = client.try_create_event_with_options(
         &organizer,
         &1,
-        &String::from_str(&env, "Below Face Value"),
-        &String::from_str(&env, "concert"),
-        &5_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Below Face Value"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 5_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
         &None,
         &None,
     );

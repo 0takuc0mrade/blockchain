@@ -204,13 +204,15 @@ fn buy_resale_with_zero_royalty_pays_the_seller_in_full() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "No Royalty Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &0u32, // 0% royalty
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "No Royalty Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 0, // 0% royalty
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     let seller = Address::generate(&env);
     let buyer = Address::generate(&env);
@@ -745,10 +747,15 @@ fn create_gift_claim_on_resale_ticket_returns_status_to_valid_and_clears_price()
     client.create_gift_claim(&owner, &ticket_id, &secret_hash, &5_000u64);
 
     let ticket = client.get_ticket(&ticket_id);
-    assert_eq!(ticket.status, TicketStatus::Valid,
-        "status must return to Valid after create_gift_claim on a listed ticket");
-    assert_eq!(ticket.resale_price, 0,
-        "resale_price must be cleared after create_gift_claim on a listed ticket");
+    assert_eq!(
+        ticket.status,
+        TicketStatus::Valid,
+        "status must return to Valid after create_gift_claim on a listed ticket"
+    );
+    assert_eq!(
+        ticket.resale_price, 0,
+        "resale_price must be cleared after create_gift_claim on a listed ticket"
+    );
 }
 
 /// Issue #374: `buy_resale` settles using `payment_token_for_event`, so when
@@ -789,18 +796,33 @@ fn buy_resale_settles_in_per_event_payment_token() {
 
     // 5% of 1_100 = 55 royalty to organizer, 1_045 to seller — all in the
     // per-event token.
-    assert_eq!(event_token.balance(&organizer), 55,
-        "organizer royalty must be paid in the per-event token");
-    assert_eq!(event_token.balance(&seller), 1_045,
-        "seller proceeds must be paid in the per-event token");
-    assert_eq!(event_token.balance(&buyer), 10_000 - 1_100,
-        "buyer must pay using the per-event token");
+    assert_eq!(
+        event_token.balance(&organizer),
+        55,
+        "organizer royalty must be paid in the per-event token"
+    );
+    assert_eq!(
+        event_token.balance(&seller),
+        1_045,
+        "seller proceeds must be paid in the per-event token"
+    );
+    assert_eq!(
+        event_token.balance(&buyer),
+        10_000 - 1_100,
+        "buyer must pay using the per-event token"
+    );
 
     // The contract-wide token must be untouched.
-    assert_eq!(default_token.balance(&organizer), 0,
-        "default token must not be touched during a per-event-token resale");
-    assert_eq!(default_token.balance(&seller), 0,
-        "default token must not be touched during a per-event-token resale");
+    assert_eq!(
+        default_token.balance(&organizer),
+        0,
+        "default token must not be touched during a per-event-token resale"
+    );
+    assert_eq!(
+        default_token.balance(&seller),
+        0,
+        "default token must not be touched during a per-event-token resale"
+    );
 
     // Ownership must have transferred.
     let ticket = client.get_ticket(&ticket_id);

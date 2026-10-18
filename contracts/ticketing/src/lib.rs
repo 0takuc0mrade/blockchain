@@ -1,7 +1,6 @@
 //! StellarTickets ticketing smart contract for Soroban on Stellar.
 #![no_std]
 #![allow(missing_docs)]
-#![allow(clippy::too_many_arguments)]
 #![allow(clippy::pedantic)]
 
 mod constants;
@@ -20,7 +19,8 @@ pub use events::{
     PaymentTokenProposed, PurchaseThrottleUpdated, TicketCheckedIn, TicketIssued,
 };
 pub use types::{
-    Category, DataKey, Event, GiftClaim, PendingPaymentToken, StoredTicket, Ticket, TicketStatus,
+    Category, DataKey, Event, EventParams, GiftClaim, PendingPaymentToken, StoredTicket, Ticket,
+    TicketStatus,
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String, Vec};
@@ -219,7 +219,7 @@ impl TicketingContract {
             .has(&DataKey::ApprovedOrganizer(organizer))
     }
 
-    /// Registers a new event/route/showing under an organizer. `event_id` is
+    /// Registers a new event under an organizer. `event_id` is
     /// chosen by the caller's backend (e.g. a ULID cast to u64) so it can be
     /// correlated with the off-chain event record. Only organizers on the
     /// admin-managed allowlist may call this, so an arbitrary address cannot
@@ -228,82 +228,19 @@ impl TicketingContract {
         env: Env,
         organizer: Address,
         event_id: u64,
-        name: String,
-        category: String,
-        max_resale_multiplier_bps: u32,
-        royalty_bps: u32,
-        starts_at: u64,
-        transfer_freeze_seconds: u64,
-        resale_cutoff_seconds: u64,
+        params: EventParams,
     ) -> Result<(), Error> {
-        Self::extend_instance_ttl(&env);
-        organizer.require_auth();
-        Self::require_initialized(&env)?;
-        Self::require_approved_organizer(&env, &organizer)?;
-        if royalty_bps > 10_000 {
-            return Err(Error::InvalidRoyalty);
-        }
-        // Issue #124: a multiplier below face value (10_000 bps) makes every
-        // resale impossible — `list_for_resale` computes the cap as
-        // `original_price * max_resale_multiplier_bps / 10_000`, which lands
-        // below the face value and rejects any listing at or above it. Require
-        // the multiplier to be at least face value.
-        if max_resale_multiplier_bps < BPS_DENOMINATOR {
-            return Err(Error::InvalidMultiplier);
-        }
-        // Issue #125: reject empty or oversized name/category.
-        Self::validate_event_labels(&name, &category)?;
-        if starts_at <= env.ledger().timestamp() {
-            return Err(Error::InvalidEventTime);
-        }
-        let key = DataKey::Event(event_id);
-        if env.storage().persistent().has(&key) {
-            return Err(Error::EventAlreadyExists);
-        }
-        let event = Event {
-            organizer,
-            name,
-            category,
-            max_resale_multiplier_bps,
-            min_resale_multiplier_bps: None,
-            max_transfers_per_ticket: None,
-            royalty_bps,
-            tickets_issued: 0,
-            starts_at,
-            transfer_freeze_seconds,
-            resale_cutoff_seconds,
-            escrow_enabled: false,
-            escrow_release_ledger: 0,
-            escrow_balance: 0,
-            payment_token: None,
-        };
-        Self::save_event(&env, event_id, &event);
-        env.storage()
-            .persistent()
-            .set(&DataKey::TicketsIssued(event_id), &0u64);
-        env.storage().persistent().extend_ttl(
-            &DataKey::TicketsIssued(event_id),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
-        Self::increment_organizer_events(&env, &event.organizer);
-        Ok(())
+        Self::create_event_with_options(env, organizer, event_id, params, None, None)
     }
 
     /// Registers an event with optional resale floor and transfer limit.
-    /// Kept separate from `create_event` to preserve the original entrypoint
-    /// ABI for existing deployments.
+    /// Kept separate from `create_event` to preserve a concise default
+    /// entrypoint when optional controls are not needed.
     pub fn create_event_with_options(
         env: Env,
         organizer: Address,
         event_id: u64,
-        name: String,
-        category: String,
-        max_resale_multiplier_bps: u32,
-        royalty_bps: u32,
-        starts_at: u64,
-        transfer_freeze_seconds: u64,
-        resale_cutoff_seconds: u64,
+        params: EventParams,
         min_resale_multiplier_bps: Option<u32>,
         max_transfers_per_ticket: Option<u32>,
     ) -> Result<(), Error> {
@@ -311,7 +248,7 @@ impl TicketingContract {
         organizer.require_auth();
         Self::require_initialized(&env)?;
         Self::require_approved_organizer(&env, &organizer)?;
-        if royalty_bps > 10_000 {
+        if params.royalty_bps > 10_000 {
             return Err(Error::InvalidRoyalty);
         }
         // Issue #124: a multiplier below face value (10_000 bps) makes every
@@ -319,12 +256,12 @@ impl TicketingContract {
         // `original_price * max_resale_multiplier_bps / 10_000`, which lands
         // below the face value and rejects any listing at or above it. Require
         // the multiplier to be at least face value.
-        if max_resale_multiplier_bps < BPS_DENOMINATOR {
+        if params.max_resale_multiplier_bps < BPS_DENOMINATOR {
             return Err(Error::InvalidMultiplier);
         }
         // Issue #125: reject empty or oversized name/category.
-        Self::validate_event_labels(&name, &category)?;
-        if starts_at <= env.ledger().timestamp() {
+        Self::validate_event_labels(&params.name, &params.category)?;
+        if params.starts_at <= env.ledger().timestamp() {
             return Err(Error::InvalidEventTime);
         }
         let key = DataKey::Event(event_id);
@@ -333,16 +270,16 @@ impl TicketingContract {
         }
         let event = Event {
             organizer,
-            name,
-            category,
-            max_resale_multiplier_bps,
+            name: params.name,
+            category: params.category,
+            max_resale_multiplier_bps: params.max_resale_multiplier_bps,
             min_resale_multiplier_bps,
             max_transfers_per_ticket,
-            royalty_bps,
+            royalty_bps: params.royalty_bps,
             tickets_issued: 0,
-            starts_at,
-            transfer_freeze_seconds,
-            resale_cutoff_seconds,
+            starts_at: params.starts_at,
+            transfer_freeze_seconds: params.transfer_freeze_seconds,
+            resale_cutoff_seconds: params.resale_cutoff_seconds,
             escrow_enabled: false,
             escrow_release_ledger: 0,
             escrow_balance: 0,
@@ -477,6 +414,7 @@ impl TicketingContract {
 
     /// Organizer-authorized issuance for tickets already paid for off-chain
     /// (card payment, comp, or fiat-to-crypto settled by the platform).
+    /// Increments the event's monotonic `tickets_issued` counter by 1.
     pub fn issue_ticket(
         env: Env,
         organizer: Address,
@@ -562,7 +500,8 @@ impl TicketingContract {
     /// The price is the organizer's configured `set_tier_price` value for the
     /// tier — it is no longer supplied by the caller, so a buyer cannot
     /// underpay a paid event (issue #127). Fails with `TierPriceNotSet` when
-    /// the organizer has not priced that tier.
+    /// the organizer has not priced that tier. Increments the event's
+    /// monotonic `tickets_issued` counter by 1.
     pub fn purchase_primary(
         env: Env,
         buyer: Address,
@@ -943,7 +882,8 @@ impl TicketingContract {
 
     /// Fraud prevention: organizer voids a ticket (chargeback, counterfeit
     /// report, policy violation). Revoked tickets can never be transferred,
-    /// resold, or checked in again.
+    /// resold, or checked in again. Does not decrement `Event.tickets_issued`,
+    /// which tracks lifetime issuance rather than active supply.
     ///
     /// # Errors
     ///
@@ -997,6 +937,7 @@ impl TicketingContract {
     /// token before the ticket is voided — the revocation remains
     /// permanent afterwards. Without a refund, behavior matches
     /// `revoke_ticket`. Revoking a used ticket is rejected either way.
+    /// Does not decrement `Event.tickets_issued`.
     ///
     /// # Errors
     ///
@@ -1032,7 +973,7 @@ impl TicketingContract {
     }
 
     /// Mass revocation of tickets by the event organizer (chargeback, policy violation).
-    /// Bounded by `MAX_BATCH_SIZE`.
+    /// Bounded by `MAX_BATCH_SIZE`. Does not decrement `Event.tickets_issued`.
     ///
     /// # Errors
     ///
@@ -1214,7 +1155,9 @@ impl TicketingContract {
         Ok(())
     }
 
-    /// Fetches an event by its id.
+    /// Fetches an event by its id. Note that `Event.tickets_issued` is a
+    /// monotonic lifetime issuance counter and is not decremented when tickets
+    /// are revoked or checked in.
     ///
     /// # Errors
     ///

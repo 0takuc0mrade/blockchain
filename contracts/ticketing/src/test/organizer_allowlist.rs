@@ -16,13 +16,15 @@ fn try_create(
     client.try_create_event(
         organizer,
         &event_id,
-        &String::from_str(env, "Squatted Event"),
-        &String::from_str(env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(env, "Squatted Event"),
+            category: String::from_str(env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     )
 }
 
@@ -50,13 +52,15 @@ fn create_event_with_options_also_requires_an_approved_organizer() {
     let result = client.try_create_event_with_options(
         &squatter,
         &7,
-        &String::from_str(&env, "Squatted Event"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Squatted Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
         &None,
         &None,
     );

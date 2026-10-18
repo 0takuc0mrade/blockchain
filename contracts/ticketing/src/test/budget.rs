@@ -49,13 +49,15 @@ fn create_event_stays_under_cost_thresholds() {
     client.create_event(
         &organizer,
         &1,
-        &String::from_str(&env, "Budget Concert"),
-        &String::from_str(&env, "concert"),
-        &12_000u32,
-        &500u32,
-        &10_000u64,
-        &100u64,
-        &200u64,
+        &EventParams {
+            name: String::from_str(&env, "Budget Concert"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
     );
     assert_budget_under_thresholds(&env);
 }
