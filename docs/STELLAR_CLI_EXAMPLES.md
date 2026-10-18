@@ -251,38 +251,109 @@ stellar contract invoke \
 
 ### create_gift_claim
 
-Create a gift claim link: a one-time claimable token that another user can redeem to receive a ticket.
+Create a hash-locked gift claim on a ticket you own. The owner picks a secret preimage, computes its SHA-256 digest on-chain (or off-chain), and stores only the digest. The preimage is shared off-chain with the intended recipient; anyone who knows it can claim the ticket before `expires_at`.
+
+**Step 1 — compute the SHA-256 digest of your secret (any 32-byte value works):**
 
 ```bash
-stellar contract invoke \
-  --id <contract-id> \
-  --source <organizer> \
-  --network testnet \
-  -- create_gift_claim \
-    --organizer <organizer-address> \
-    --event_id 1 \
-    --tier '"GA"' \
-    --seat '"15B"' \
-    --price 0
+# Produce a random 32-byte hex secret
+SECRET_HEX=$(openssl rand -hex 32)
+echo "Secret (share privately): $SECRET_HEX"
+
+# Compute the SHA-256 hash of the raw bytes, then encode it as base64
+SECRET_HASH=$(echo -n "$SECRET_HEX" | xxd -r -p | openssl dgst -sha256 -binary | base64)
+echo "Secret hash (stored on-chain): $SECRET_HASH"
 ```
 
-Returns a `claim_id`; the organizer shares this with the recipient.
+**Step 2 — create the gift claim on the ticket you own:**
+
+```bash
+# expires_at is a Unix timestamp (seconds); give the recipient at least a few hours
+EXPIRES_AT=1800000000
+
+stellar contract invoke \
+  --id <contract-id> \
+  --source <owner> \
+  --network testnet \
+  -- create_gift_claim \
+    --owner <owner-address> \
+    --ticket_id <ticket-id> \
+    --secret_hash "$SECRET_HASH" \
+    --expires_at $EXPIRES_AT
+```
+
+- `--owner` must be the current ticket owner and must sign the transaction (`--source <owner>`).
+- `--ticket_id` is the `u64` ID returned when the ticket was issued or purchased.
+- `--secret_hash` is the 32-byte SHA-256 digest of the preimage, encoded as a base64 string. The contract stores only this hash — the preimage never touches the ledger.
+- `--expires_at` is a Unix timestamp in seconds; the claim is invalid at or after this time.
+- If the ticket is listed for resale, calling `create_gift_claim` clears the resale listing first.
+- Share `SECRET_HEX` (the raw preimage) with the recipient through a secure side-channel (e.g., encrypted message).
 
 ### claim_gift
 
-Claim a gift (recipient-only).
+Claim a gifted ticket by presenting the secret preimage before the expiry time. The recipient must know the raw preimage the owner used in `create_gift_claim`.
 
 ```bash
+# The recipient received SECRET_HEX from the owner off-chain.
+# Convert the hex preimage to the raw bytes that the contract hashes:
+SECRET_BYTES=$(echo -n "$SECRET_HEX" | xxd -r -p | base64)
+
 stellar contract invoke \
   --id <contract-id> \
-  --source <buyer> \
+  --source <recipient> \
   --network testnet \
   -- claim_gift \
-    --claimer <buyer-address> \
-    --claim_id <claim-id>
+    --recipient <recipient-address> \
+    --ticket_id <ticket-id> \
+    --secret "$SECRET_BYTES"
 ```
 
-The claimer becomes the ticket owner.
+- `--recipient` is the address that will become the new ticket owner and must sign (`--source <recipient>`).
+- `--ticket_id` is the same ticket ID the owner used in `create_gift_claim`.
+- `--secret` is the raw preimage bytes (base64-encoded) whose SHA-256 must match the stored `secret_hash`.
+- The call fails with `GiftClaimExpired` if the current block timestamp is ≥ `expires_at`.
+- The call fails with `InvalidSecret` if the SHA-256 of `secret` does not match the stored hash.
+- On success the ticket's owner is updated to `recipient`, the claim record is deleted, and `ticket.transfers` increments by 1.
+
+**End-to-end example (testnet):**
+
+```bash
+CONTRACT_ID=<contract-id>
+TICKET_ID=<ticket-id>
+
+# --- Owner side ---
+SECRET_HEX=$(openssl rand -hex 32)
+SECRET_HASH=$(echo -n "$SECRET_HEX" | xxd -r -p | openssl dgst -sha256 -binary | base64)
+EXPIRES_AT=$(( $(date +%s) + 86400 ))   # 24 hours from now
+
+stellar contract invoke \
+  --id $CONTRACT_ID \
+  --source owner \
+  --network testnet \
+  -- create_gift_claim \
+    --owner $(stellar keys address owner --network testnet) \
+    --ticket_id $TICKET_ID \
+    --secret_hash "$SECRET_HASH" \
+    --expires_at $EXPIRES_AT
+
+# Share SECRET_HEX with the recipient through a secure channel.
+
+# --- Recipient side (after receiving SECRET_HEX) ---
+SECRET_BYTES=$(echo -n "$SECRET_HEX" | xxd -r -p | base64)
+
+stellar contract invoke \
+  --id $CONTRACT_ID \
+  --source recipient \
+  --network testnet \
+  -- claim_gift \
+    --recipient $(stellar keys address recipient --network testnet) \
+    --ticket_id $TICKET_ID \
+    --secret "$SECRET_BYTES"
+
+# Verify ownership transferred:
+stellar contract invoke --id $CONTRACT_ID --network testnet \
+  -- get_ticket --ticket_id $TICKET_ID
+```
 
 ## Ticket verification & check-in
 

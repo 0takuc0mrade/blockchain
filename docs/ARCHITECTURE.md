@@ -329,6 +329,33 @@ Ticket revoked (permanently unusable)
 
 All monetary transfers go through a single SEP-41 `payment_token` configured at `initialize`. `purchase_primary` and `buy_resale` are the only functions that move funds; both do so atomically with the ownership change in the same transaction.
 
+### Escrow lifecycle
+
+When an organizer opts an event into escrow mode, primary sale proceeds are held by the contract rather than paid out immediately. The escrow has three states:
+
+- **Off** — default; primary sale proceeds go directly to the organizer.
+- **Holding** — `enable_escrow` has been called (before any tickets are sold) and `escrow_release_ledger` is set; every `purchase_primary` call transfers funds to the contract and increments `escrow_balance`.
+- **Released** — `release_escrow` has been called after the ledger sequence reached `escrow_release_ledger`; the full `escrow_balance` is transferred to the organizer and the balance is zeroed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Off : create_event / create_event_with_options\n(escrow_enabled = false)
+
+    Off --> Holding : enable_escrow(organizer, event_id, escrow_release_ledger)\n[no tickets issued yet]
+
+    Holding --> Holding : purchase_primary(buyer, …)\nescrow_balance += price
+
+    Holding --> Released : release_escrow(organizer, event_id)\n[ledger.sequence >= escrow_release_ledger]\ntransfer escrow_balance → organizer\nescrow_balance = 0
+
+    Released --> [*]
+```
+
+**Constraints:**
+- `enable_escrow` is rejected if any ticket has already been sold (`tickets_issued > 0`) — it would otherwise retroactively change the payment terms for completed purchases.
+- `release_escrow` is rejected before `escrow_release_ledger` is reached (`EventNotEnded` error).
+- `release_escrow` is rejected on events where escrow was never enabled (`EscrowNotEnabled` error).
+- The `escrow_balance` on the `Event` record is the single source of truth; it is incremented by every `purchase_primary` and zeroed by `release_escrow`.
+
 ### Payment token resolution (issue #235)
 
 ```text

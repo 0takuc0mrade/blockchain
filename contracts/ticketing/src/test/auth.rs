@@ -252,3 +252,94 @@ fn malicious_token_reentrancy_fails_safely_and_preserves_state() {
     let event_after = client.get_event(&1);
     assert!(event_after.tickets_issued <= event_before.tickets_issued + 1);
 }
+
+/// Issue #368: The throttle check uses `< spacing`, so a purchase exactly
+/// `spacing` ledgers after the previous one must be accepted, while a purchase
+/// at `spacing - 1` ledgers must be rejected. This test pins the boundary
+/// so a one-off error in the comparison would be caught.
+#[test]
+fn purchase_throttle_boundary_spacing_minus_one_rejected_spacing_accepted() {
+    let (env, client, _token, token_asset, admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    client.set_purchase_throttle(&admin, &10u32);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &30_000i128);
+
+    // First purchase at ledger 100.
+    env.ledger().set_sequence_number(100);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // At ledger 109 (spacing - 1 = 9 ledgers later), the purchase must be rejected.
+    env.ledger().set_sequence_number(109);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    let rejected = client.try_purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "2"),
+    );
+    assert_eq!(
+        rejected,
+        Err(Ok(Error::PurchaseTooSoon)),
+        "purchase at spacing-1 ledgers must be rejected"
+    );
+
+    // At ledger 110 (exactly spacing = 10 ledgers later), the purchase must succeed.
+    env.ledger().set_sequence_number(110);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    let accepted = client.try_purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "3"),
+    );
+    assert!(
+        accepted.is_ok(),
+        "purchase at exactly spacing ledgers must be accepted"
+    );
+}
+
+/// Issue #369: When `min_ledger_spacing` is set to zero, the throttle is
+/// disabled and back-to-back purchases in the same ledger must succeed.
+#[test]
+fn purchase_throttle_zero_disables_throttle_allowing_back_to_back_purchases() {
+    let (env, client, _token, token_asset, admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+
+    // Enable a non-zero throttle first, then disable it by setting to zero.
+    client.set_purchase_throttle(&admin, &10u32);
+    client.set_purchase_throttle(&admin, &0u32);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    // Both purchases happen on the same ledger — no spacing at all.
+    env.ledger().set_sequence_number(100);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // Second purchase on the same ledger must succeed because throttle is disabled.
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    let second = client.try_purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "2"),
+    );
+    assert!(
+        second.is_ok(),
+        "back-to-back purchase must succeed when throttle is zero (disabled)"
+    );
+}
