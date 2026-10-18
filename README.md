@@ -44,7 +44,11 @@ before. Skip this if you already know the stack.
 | **`require_auth()`** | A Soroban SDK call that says "this specific address must have cryptographically signed this transaction, or it fails." | Every function below that changes state calls this on the relevant party (organizer, ticket owner, buyer) — it's what makes `NotOwner`/`NotOrganizer` checks actually enforceable, not just a suggestion. |
 | **Basis points (bps)** | A unit equal to 1/100th of a percent. 100 bps = 1%, 10,000 bps = 100%. | `royalty_bps` and `max_resale_multiplier_bps` are both expressed this way — e.g. `royalty_bps: 500` means a 5% royalty on every resale. |
 | **SEP-41 token** | Stellar's standard interface for fungible tokens (an ERC-20 equivalent), implemented by both the native XLM asset and custom Stellar Asset Contracts. | The `payment_token` this contract is initialized with is any SEP-41 token — primary sales and resale settlement move that token, not XLM specifically. |
+ fix/storage-ttl-snapshots
+| **Ledger TTL / "bump"** | Soroban storage isn't permanent by default — each entry has a time-to-live measured in ledgers, and has to be periodically extended ("bumped") or it gets archived. | Instance TTL is refreshed on every contract call; tickets are refreshed on writes and successful reads. Event TTL is refreshed on creation; see `LEDGER_BUMP`/`LEDGER_THRESHOLD` in `lib.rs`. |
+
 | **Ledger TTL / "bump"** | Soroban storage isn't permanent by default — each entry has a time-to-live measured in ledgers, and has to be periodically extended ("bumped") or it gets archived. | Every write in this contract calls `extend_ttl` so events and tickets don't silently expire from storage; see `LEDGER_BUMP`/`LEDGER_THRESHOLD` in `lib.rs` and the full policy in [`docs/STORAGE_TTL.md`](docs/STORAGE_TTL.md). |
+ main
 | **`stellar` CLI** | The official command-line tool for building, deploying, and invoking Soroban contracts. | Every command in this README is run through it. |
 
 ## Why one contract for every industry
@@ -114,7 +118,7 @@ subscribe to these instead of polling every ticket on every block — see
 
 See [`contracts/ticketing/src/lib.rs`](contracts/ticketing/src/lib.rs) for the
 full implementation and
-[`contracts/ticketing/src/test.rs`](contracts/ticketing/src/test.rs) for the
+[`contracts/ticketing/src/test/`](contracts/ticketing/src/test/) for the
 behavioral spec — 30 tests covering issuance, check-in idempotency,
 revocation, resale price caps, royalty splitting, multi-organizer isolation,
 and free/comp-ticket edge cases.
@@ -175,7 +179,7 @@ whether a backend should retry it — see
 **Prerequisites:**
 
 - [Rust](https://rustup.rs/) 1.70.0 or later (MSRV: 1.70.0, pinned via [`rust-toolchain.toml`](rust-toolchain.toml))
-- The `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
+- The `wasm32v1-none` target: `rustup target add wasm32v1-none`
 - The [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools) (`stellar`)
 
 ```bash
@@ -307,7 +311,7 @@ Once deployed, hand `<contract-id>` to the backend as its
 │   └── ticketing
 │       ├── src
 │       │   ├── lib.rs             # contract logic, storage, errors, events
-│       │   └── test.rs            # 30 unit tests (soroban-sdk testutils)
+│       │   └── test/              # unit tests (soroban-sdk testutils)
 │       ├── test_snapshots         # recorded auth/storage snapshots per test
 │       ├── Makefile
 │       └── Cargo.toml

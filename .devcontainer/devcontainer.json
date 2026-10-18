@@ -1,0 +1,31 @@
+{
+  "name": "Stellar Tickets Blockchain",
+  "image": "mcr.microsoft.com/devcontainers/rust:1.82-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.82",
+      "components": "rustfmt,clippy"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "serena.robo-config"
+      ],
+      "settings": {
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "rust-analyzer.cargo.target": "wasm32v1-none"
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "mounts": [
+    "source=${localWorkspaceFolder}/target,target=/workspace/target,type=bind,consistency=cached"
+  ],
+  "forwardPorts": [],
+  "runArgs": ["--cap-add=SYS_PTRACE", "--security-opt=seccomp=unconfined"]
+}

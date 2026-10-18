@@ -31,8 +31,26 @@ pub fn setup<'a>() -> (
     let contract_id = env.register(TicketingContract, ());
     let client = TicketingContractClient::new(&env, &contract_id);
     client.initialize(&admin, &token_contract.address());
+    // Event creation is restricted to allowlisted organizers (issue #135).
+    client.approve_organizer(&admin, &organizer);
 
     (env, client, token, token_asset, admin, organizer)
+}
+
+pub fn setup_uninitialized<'a>() -> (Env, TicketingContractClient<'a>, Address, Address, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let organizer = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+
+    let contract_id = env.register(TicketingContract, ());
+    let client = TicketingContractClient::new(&env, &contract_id);
+
+    (env, client, token_contract.address(), admin, organizer)
 }
 
 pub fn make_event(env: &Env, client: &TicketingContractClient, organizer: &Address, event_id: u64) {

@@ -62,7 +62,7 @@ fn transfer_limit_counts_direct_transfers() {
     );
 
     client.transfer_ticket(&owner, &ticket_id, &friend);
-    assert_eq!(client.verify_ticket(&ticket_id).transfers, 1);
+    assert_eq!(client.get_ticket(&ticket_id).transfers, 1);
     assert_eq!(
         client.try_transfer_ticket(&friend, &ticket_id, &organizer),
         Err(Ok(Error::TransferLimitExceeded))
@@ -85,7 +85,7 @@ fn organizer_can_reassign_a_ticket_seat() {
 
     client.set_seat(&organizer, &ticket_id, &String::from_str(&env, "B4"));
     assert_eq!(
-        client.verify_ticket(&ticket_id).seat,
+        client.get_ticket(&ticket_id).seat,
         String::from_str(&env, "B4")
     );
 }

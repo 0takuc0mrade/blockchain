@@ -51,11 +51,11 @@ verification, not with a readable error.
 
 ## The contract surface
 
-31 entry points. Grouped by what the backend has to do with them:
+32 entry points. Grouped by what the backend has to do with them:
 
 | Group | Entry points |
 |---|---|
-| Reads (no signature) | `get_event`, `get_ticket`, `verify_ticket`, `verify_tickets`, `event_payment_token`, `token_decimals` |
+| Reads (no signature) | `get_event`, `get_ticket`, `verify_ticket`, `verify_tickets`, `is_valid`, `event_payment_token`, `token_decimals` |
 | Organizer writes | `create_event`, `create_event_with_options`, `allocate_lottery`, `enable_escrow`, `set_event_payment_token`, `issue_ticket`, `set_seat`, `check_in`, `check_in_batch`, `revoke_ticket`, `revoke_with_refund`, `revoke_batch`, `release_escrow` |
 | Owner writes | `transfer_ticket`, `transfer_batch`, `create_gift_claim`, `claim_gift`, `list_for_resale`, `cancel_resale` |
 | Buyer writes | `purchase_primary`, `buy_resale` |

@@ -76,6 +76,10 @@ Two structural notes:
 
 ## The gap: `Event` is extended only at creation
 
+`TicketsIssued(id)` and `OrganizerEvents(address)` are separate persistent
+counter entries. They are extended when created and whenever their counters
+change.
+
 This is the most important operational fact in this document.
 
 `Event(id)` is written in six places after creation — `allocate_lottery`,

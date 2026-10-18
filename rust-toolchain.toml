@@ -1,3 +1,25 @@
+# Pinned to `stable` to match what CI actually builds with.
+#
+# Every workflow in .github/workflows/ uses `dtolnay/rust-toolchain@stable`, so
+# the previous hard pin to 1.70 only ever applied to local builds — and 1.70
+# cannot compile this dependency tree at all (`darling` 0.23 requires rustc
+# 1.88). That combination is what made the workspace unbuildable on a fresh
+# checkout: CI used one toolchain, contributors were told to use another, and
+# neither could produce a working build.
+#
+# If a concrete version is preferred for reproducibility, pin it to a release
+# that satisfies the dependency tree (>= 1.88) and update the workflows to
+# match, so the two cannot drift apart again.
+#
+# The target is `wasm32v1-none`, not `wasm32-unknown-unknown` (issue #8).
+# Every documented build path in this repo -- README, docs/MAINNET.md,
+# docs/CARGO_PROFILES.md, docs/AUDIT.md, and release.yml -- reads its artifact
+# from `target/wasm32v1-none/release/`, and `stellar contract build` emits
+# there on current CLI versions. The old pin installed a target none of them
+# used, so a fresh clone could not produce the artifact the docs told you to
+# deploy. The workflows are updated in step, since `dtolnay/rust-toolchain`
+# takes an explicit `targets:` that would otherwise override this file and
+# reinstall the wrong one.
 [toolchain]
-channel = "1.70"
-targets = ["wasm32-unknown-unknown"]
+channel = "stable"
+targets = ["wasm32v1-none"]

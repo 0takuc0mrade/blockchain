@@ -3,6 +3,29 @@
 
 use soroban_sdk::{contracttype, Address, BytesN, String};
 
+/// Optional common category labels for indexers and client applications.
+///
+/// `Event.category` intentionally remains a `String` so deployments can add
+/// industry-specific labels without a contract migration. Use `Other` when a
+/// value does not fit the common vocabulary.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Category {
+    Concert,
+    Flight,
+    Sports,
+    Festival,
+    Conference,
+    Bus,
+    Cinema,
+    Museum,
+    TouristAttraction,
+    PublicTransport,
+    University,
+    Corporate,
+    Other,
+}
+
 /// Lifecycle status of a ticket.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -109,6 +132,30 @@ pub struct Ticket {
     pub transfers: u32,
 }
 
+/// Compact persistent representation for a ticket.
+///
+/// The public `Ticket` ABI stays unchanged for clients, while storage packs
+/// status and transfer count into one lifecycle word to reduce the persistent
+/// footprint of every ticket record.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredTicket {
+    /// Id of the event this ticket admits entry to.
+    pub event_id: u64,
+    /// Current owner of the ticket.
+    pub owner: Address,
+    /// Ticket tier name, e.g. "VIP" or "GA".
+    pub tier: String,
+    /// Assigned seat, or "unassigned" for general admission.
+    pub seat: String,
+    /// Packed lifecycle state: low byte is `TicketStatus`, high bits are transfers.
+    pub lifecycle: u64,
+    /// Price paid at primary sale; used for resale caps and refunds.
+    pub original_price: i128,
+    /// Asking price while the ticket is listed for resale; 0 otherwise.
+    pub resale_price: i128,
+}
+
 /// A pending gift-claim link for a ticket.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -151,8 +198,21 @@ pub enum DataKey {
     GiftClaim(u64),
     /// Monotonic counter used to allocate new ticket ids.
     NextTicketId,
+    /// Number of tickets issued for an event. Kept separate from `Event` so
+    /// minting does not rewrite the complete event record.
+    TicketsIssued(u64),
+    /// Primary sale price for one of an event's tiers, keyed by event id and
+    /// tier name (issue #127). Stored alongside the event record rather than
+    /// inside it so changing a tier price never rewrites the whole `Event`
+    /// struct, which also keeps already-stored event records readable.
+    TierPrice(u64, String),
+    /// Number of events registered by an organizer.
+    OrganizerEvents(Address),
     /// Ledger sequence of a buyer's most recent primary purchase.
     LastPurchaseLedger(Address),
     /// Minimum ledger spacing enforced between a buyer's primary purchases.
     MinPurchaseSpacing,
+    /// Presence marks an organizer the admin has approved to create events
+    /// (issue #135).
+    ApprovedOrganizer(Address),
 }

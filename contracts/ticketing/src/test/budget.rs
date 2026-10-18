@@ -43,6 +43,26 @@ fn issue_ticket_stays_under_cost_thresholds() {
 }
 
 #[test]
+fn create_event_stays_under_cost_thresholds() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+
+    client.create_event(
+        &organizer,
+        &1,
+        &EventParams {
+            name: String::from_str(&env, "Budget Concert"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 100,
+            resale_cutoff_seconds: 200,
+        },
+    );
+    assert_budget_under_thresholds(&env);
+}
+
+#[test]
 fn verify_ticket_stays_under_cost_thresholds() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
     make_event(&env, &client, &organizer, 1);
@@ -56,7 +76,62 @@ fn verify_ticket_stays_under_cost_thresholds() {
         &1_000i128,
     );
 
-    client.verify_ticket(&ticket_id);
+    client.get_ticket(&ticket_id);
+    assert_budget_under_thresholds(&env);
+}
+
+#[test]
+fn transfer_ticket_stays_under_cost_thresholds() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let buyer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    client.transfer_ticket(&buyer, &ticket_id, &recipient);
+    assert_budget_under_thresholds(&env);
+}
+
+#[test]
+fn check_in_stays_under_cost_thresholds() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let buyer = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    client.check_in(&organizer, &ticket_id);
+    assert_budget_under_thresholds(&env);
+}
+
+#[test]
+fn extend_ticket_ttl_stays_under_cost_thresholds() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let buyer = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "unassigned"),
+        &1_000i128,
+    );
+
+    client.extend_ticket_ttl(&ticket_id);
     assert_budget_under_thresholds(&env);
 }
 

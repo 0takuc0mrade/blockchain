@@ -7,6 +7,7 @@
 - [EVENTS.md](EVENTS.md) — on-chain events
 - [INTEGRATION.md](INTEGRATION.md) — integration guide for backend developers
 - [THREAT_MODEL.md](THREAT_MODEL.md) — assets, trust boundaries, and residual risks
+- [ORGANIZER_ALLOWLIST.md](ORGANIZER_ALLOWLIST.md) — who may create events, and why
 - [TESTING.md](TESTING.md) — test suite coverage
 - [DEPLOYMENT.md](DEPLOYMENT.md) — deployment checklist
 - [../DEPLOYMENTS.md](../DEPLOYMENTS.md) — deployment records and template

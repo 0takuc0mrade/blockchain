@@ -28,6 +28,36 @@ fn create_event_rejects_a_duplicate_event_id() {
 }
 
 #[test]
+fn get_organizer_events_returns_the_registered_event_count() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    assert_eq!(client.get_organizer_events(&organizer), 0);
+    make_event(&env, &client, &organizer, 1);
+    make_event(&env, &client, &organizer, 2);
+    assert_eq!(client.get_organizer_events(&organizer), 2);
+    let other = Address::generate(&env);
+    assert_eq!(client.get_organizer_events(&other), 0);
+}
+
+#[test]
+fn public_getters_return_typed_values_and_typed_errors() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "A1"),
+        &0i128,
+    );
+    assert_eq!(client.get_event(&1).tickets_issued, 1);
+    assert_eq!(client.get_ticket(&ticket_id).owner, owner);
+    assert_eq!(client.try_get_event(&999), Err(Ok(Error::EventNotFound)));
+    assert_eq!(client.try_get_ticket(&999), Err(Ok(Error::TicketNotFound)));
+}
+
+#[test]
 fn create_event_rejects_a_royalty_above_10_000_bps() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
     let bad_royalty = client.try_create_event(
@@ -176,8 +206,8 @@ fn events_with_identical_names_have_independent_state() {
     assert_eq!(client.get_event(&102u64).tickets_issued, 1);
 
     client.check_in(&organizer, &ticket1);
-    assert_eq!(client.verify_ticket(&ticket1).status, TicketStatus::Used);
-    assert_eq!(client.verify_ticket(&ticket2).status, TicketStatus::Valid);
+    assert_eq!(client.get_ticket(&ticket1).status, TicketStatus::Used);
+    assert_eq!(client.get_ticket(&ticket2).status, TicketStatus::Valid);
 }
 
 #[test]
@@ -185,7 +215,7 @@ fn events_and_tickets_with_unicode_names_and_categories() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
 
     let unicode_name = String::from_str(&env, "東京ライブ 2026 🎵 (Tokyo Live)");
-    let unicode_category = String::from_str(&env, "音楽・コンサート / Festival ✨");
+    let unicode_category = String::from_str(&env, "音楽 / Festival ✨");
 
     client.create_event(
         &organizer,
@@ -218,7 +248,7 @@ fn events_and_tickets_with_unicode_names_and_categories() {
         &8_888i128,
     );
 
-    let ticket = client.verify_ticket(&ticket_id);
+    let ticket = client.get_ticket(&ticket_id);
     assert_eq!(ticket.tier, unicode_tier);
     assert_eq!(ticket.seat, unicode_seat);
     assert_eq!(ticket.owner, buyer);
@@ -299,12 +329,12 @@ fn escrowed_primary_sale_holds_funds_in_the_contract() {
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
 
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     let event = client.get_event(&1);
@@ -321,12 +351,12 @@ fn release_escrow_rejects_before_the_event_ends() {
 
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     env.ledger().set_sequence_number(499);
@@ -342,12 +372,12 @@ fn release_escrow_pays_the_organizer_after_the_event_ends() {
 
     let buyer = Address::generate(&env);
     token_asset.mint(&buyer, &10_000i128);
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     env.ledger().set_sequence_number(500);
@@ -399,12 +429,12 @@ fn per_event_payment_token_routes_settlement() {
     let buyer = Address::generate(&env);
     token2_asset.mint(&buyer, &5_000i128);
 
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
     client.purchase_primary(
         &buyer,
         &1,
         &String::from_str(&env, "GA"),
         &String::from_str(&env, "1"),
-        &2_000i128,
     );
 
     assert_eq!(token2.balance(&organizer), 2_000);
@@ -430,4 +460,116 @@ fn per_event_payment_token_rejects_change_after_tickets_issued() {
     let token2_contract = env.register_stellar_asset_contract_v2(token2_admin);
     let err = client.try_set_event_payment_token(&organizer, &1, &Some(token2_contract.address()));
     assert_eq!(err, Err(Ok(Error::TicketsAlreadyIssued)));
+}
+
+#[test]
+fn create_event_accepts_a_royalty_of_exactly_10_000_bps() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    client.create_event(
+        &organizer,
+        &1,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 12_000,
+            royalty_bps: 10_000, // exactly 100%: upper boundary is inclusive
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
+    );
+    assert_eq!(client.get_event(&1).royalty_bps, 10_000);
+}
+
+/// Issue #124: a zero multiplier is no longer accepted. Previously it was
+/// stored and then silently made every resale impossible (cap 0), which is a
+/// dead-end event rather than a valid configuration. The contract now rejects
+/// it at creation with `Error::InvalidMultiplier`; see
+/// `resale_multiplier.rs` for the full boundary coverage.
+#[test]
+fn create_event_rejects_zero_max_resale_multiplier() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    let result = client.try_create_event(
+        &organizer,
+        &1,
+        &EventParams {
+            name: String::from_str(&env, "Event"),
+            category: String::from_str(&env, "concert"),
+            max_resale_multiplier_bps: 0,
+            royalty_bps: 500,
+            starts_at: 10_000,
+            transfer_freeze_seconds: 0,
+            resale_cutoff_seconds: 0,
+        },
+    );
+    assert_eq!(result, Err(Ok(Error::InvalidMultiplier)));
+}
+
+/// #142: `purchase_primary` on an event id that was never created must
+/// surface `Error::EventNotFound` rather than panicking or falling through
+/// to a price/tier lookup on default-initialized state.
+#[test]
+fn purchase_primary_returns_event_not_found_for_a_nonexistent_event() {
+    let (env, client, _token, token_asset, _admin, _organizer) = setup();
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    let result = client.try_purchase_primary(
+        &buyer,
+        &999,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+    assert_eq!(result, Err(Ok(Error::EventNotFound)));
+}
+
+/// Issue #373: `release_escrow` resets `escrow_balance` to zero before
+/// transferring funds. Calling it a second time must not pay out again — the
+/// organizer balance must be unchanged after the second call.
+#[test]
+fn release_escrow_pays_out_only_once() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    client.enable_escrow(&organizer, &1, &500u32);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &10_000i128);
+
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &2_000i128);
+    client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // Advance past the escrow release ledger so `release_escrow` is allowed.
+    env.ledger().set_sequence_number(500);
+
+    // First release: escrow_balance (2_000) must be paid to organizer.
+    client.release_escrow(&organizer, &1);
+    let balance_after_first = token.balance(&organizer);
+    assert_eq!(
+        balance_after_first, 2_000,
+        "first release_escrow must transfer the full escrowed amount"
+    );
+    assert_eq!(
+        client.get_event(&1).escrow_balance,
+        0,
+        "escrow_balance must be zero after first release"
+    );
+
+    // Second release: escrow_balance is already 0, so the organizer must
+    // receive nothing additional — the balance must be unchanged.
+    client.release_escrow(&organizer, &1);
+    let balance_after_second = token.balance(&organizer);
+    assert_eq!(
+        balance_after_second, balance_after_first,
+        "second release_escrow must not pay out again"
+    );
+    assert_eq!(
+        client.get_event(&1).escrow_balance,
+        0,
+        "escrow_balance must remain zero after second release"
+    );
 }
