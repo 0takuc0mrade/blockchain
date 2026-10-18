@@ -1178,6 +1178,56 @@ fn revoke_with_refund_rejects_already_revoked_ticket() {
     assert_eq!(result, Err(Ok(Error::Revoked)));
 }
 
+/// Issue #364: calling `revoke_with_refund` with `refund = true` on a ticket
+/// that is already revoked must fail with `Error::Revoked` and must not
+/// transfer any tokens to the owner (i.e. no double-refund).
+#[test]
+fn revoke_with_refund_with_refund_true_rejects_already_revoked_ticket_and_makes_no_payment() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+
+    let buyer = Address::generate(&env);
+    token_asset.mint(&buyer, &5_000i128);
+    token_asset.mint(&organizer, &5_000i128);
+
+    client.set_tier_price(&organizer, &1, &String::from_str(&env, "GA"), &1_000i128);
+    let ticket_id = client.purchase_primary(
+        &buyer,
+        &1,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+    );
+
+    // First revoke-with-refund: should succeed and pay the buyer back.
+    client.revoke_with_refund(&organizer, &ticket_id, &true);
+    assert_eq!(client.get_ticket(&ticket_id).status, TicketStatus::Revoked);
+    let buyer_balance_after_first = token.balance(&buyer);
+
+    // Snapshot balances before the second (invalid) call.
+    let organizer_balance_before = token.balance(&organizer);
+    let buyer_balance_before = token.balance(&buyer);
+
+    // Second call must be rejected — ticket is already revoked.
+    let result = client.try_revoke_with_refund(&organizer, &ticket_id, &true);
+    assert_eq!(
+        result,
+        Err(Ok(Error::Revoked)),
+        "second revoke_with_refund must fail with Error::Revoked"
+    );
+
+    // No tokens must have moved.
+    assert_eq!(
+        token.balance(&buyer),
+        buyer_balance_before,
+        "buyer balance must not change on a rejected revoke_with_refund"
+    );
+    assert_eq!(
+        token.balance(&organizer),
+        organizer_balance_before,
+        "organizer balance must not change on a rejected revoke_with_refund"
+    );
+}
+
 #[test]
 fn revoke_batch_rejects_already_revoked_ticket() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();

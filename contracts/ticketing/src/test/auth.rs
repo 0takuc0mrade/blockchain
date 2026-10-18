@@ -126,6 +126,81 @@ fn apply_payment_token_rejects_without_proposal() {
     assert_eq!(result, Err(Ok(Error::NoPendingPaymentToken)));
 }
 
+/// Issue #365: proposing the token that is already active is a no-op change
+/// and must be rejected with `SamePaymentToken` before the timelock starts.
+#[test]
+fn propose_payment_token_rejects_same_token() {
+    let (env, client, token, _token_asset, admin, _organizer) = setup();
+    // The token registered by `setup()` is already the active payment token.
+    let result = client.try_propose_payment_token(&admin, &token.address);
+    assert_eq!(result, Err(Ok(Error::SamePaymentToken)));
+}
+
+/// Issue #366: a second proposal replaces the pending one and resets the
+/// timelock. Applying at the first deadline must fail with
+/// `TimelockNotElapsed`.
+#[test]
+fn second_proposal_resets_timelock() {
+    let (env, client, _token, _token_asset, admin, _organizer) = setup();
+
+    let new_token_a = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    let new_token_b = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+
+    // First proposal at ledger 0 — timelock expires at
+    // PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS.
+    client.propose_payment_token(&admin, &new_token_a);
+    let delay = PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS;
+
+    // Advance partway through the delay, then make a second proposal.
+    env.ledger().set_sequence_number(delay / 2);
+    client.propose_payment_token(&admin, &new_token_b);
+
+    // The first deadline has now passed relative to when the second
+    // proposal was made, but the second proposal's deadline is further out.
+    env.ledger().set_sequence_number(delay);
+    let early_apply = client.try_apply_payment_token(&admin);
+    assert_eq!(
+        early_apply,
+        Err(Ok(Error::TimelockNotElapsed)),
+        "apply must fail at the first proposal's deadline after a re-proposal"
+    );
+
+    // Advance past the second proposal's deadline and verify it can be applied.
+    env.ledger()
+        .set_sequence_number(delay / 2 + delay);
+    client.apply_payment_token(&admin);
+}
+
+/// Issue #367: after `apply_payment_token` succeeds and clears the pending
+/// proposal, a second `apply_payment_token` must fail with
+/// `NoPendingPaymentToken`.
+#[test]
+fn apply_payment_token_clears_pending_proposal() {
+    let (env, client, _token, _token_asset, admin, _organizer) = setup();
+
+    let new_token = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+
+    client.propose_payment_token(&admin, &new_token);
+
+    // Advance past the timelock and apply once — this must succeed.
+    env.ledger().set_sequence_number(100_000);
+    client.apply_payment_token(&admin);
+
+    // A second apply must fail because the proposal was consumed.
+    let second_apply = client.try_apply_payment_token(&admin);
+    assert_eq!(
+        second_apply,
+        Err(Ok(Error::NoPendingPaymentToken)),
+        "a second apply_payment_token must fail after the proposal has been consumed"
+    );
+}
+
 #[test]
 fn purchase_throttle_rejects_rapid_repeat_purchases() {
     let (env, client, _token, token_asset, admin, organizer) = setup();
